@@ -20,9 +20,9 @@
  * so it never shows something that didn't save. Changes made on another phone
  * arrive through Supabase Realtime.
  *
- * Anything else the app asks for -- "mcp" (Gmail, Calendar) and "sample" (Ask
- * Claude) -- is answered "not available", which the app already handles by
- * hiding those buttons. Those come back in a later step.
+ * "mcp" is answered with Google Calendar only (see Send to Calendar below).
+ * "sample" (Ask Claude) is answered "not available", which the app already
+ * handles by hiding the button. Gmail and Ask Claude come back in a later step.
  */
 (function () {
   'use strict';
@@ -407,10 +407,58 @@
       .catch(function () {});
   }
 
+  /* ---------- Send to Calendar -------------------------------------------- */
+  /* On claude.ai the app sent events straight to Google Calendar through the
+     Calendar connector. Here there is no connector, so the same request opens
+     Google Calendar with the event already filled in -- title, time, length,
+     and the job name and bullets in the description -- and Stephen taps Save.
+     The app still stamps the note with its date, as before.
+
+     Only "Google Calendar" is offered. has("Gmail") is false, so tapping an
+     email address in a note keeps doing what it did without a connector:
+     copy the address. */
+
+  function gcalStamp(iso, allDay) {
+    if (allDay) return String(iso).slice(0, 10).replace(/-/g, '');
+    return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  }
+  function calendarLink(p) {
+    var tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* ignore */ }
+    var q = [
+      'action=TEMPLATE',
+      'text=' + encodeURIComponent(p.summary || 'Job Book item'),
+      'dates=' + gcalStamp(p.startTime, p.allDay) + '/' + gcalStamp(p.endTime, p.allDay),
+      'details=' + encodeURIComponent(p.description || '')
+    ];
+    if (tz) q.push('ctz=' + encodeURIComponent(tz));
+    return 'https://calendar.google.com/calendar/render?' + q.join('&');
+  }
+  var mcpApi = {
+    has: function (server) { return server === 'Google Calendar'; },
+    /* Called straight from the tap on Send, so the browser allows it to open
+       a new page. */
+    callTool: function (server, tool, payload) {
+      if (server !== 'Google Calendar' || tool !== 'create_event') {
+        return Promise.reject(err('server_not_connected', server + ' is not available in this version'));
+      }
+      var url = calendarLink(payload || {});
+      window.__lastCalendarLink = url;
+      var w = null;
+      /* No 'noopener' flag: with it, window.open always reports failure, and
+         the fallback below would open the calendar a second time. */
+      try { w = window.open(url, '_blank'); } catch (e) { w = null; }
+      if (w) { try { w.opener = null; } catch (e) { /* ignore */ } }
+      else { try { location.assign(url); } catch (e) { /* nothing left to try */ } }
+      return Promise.resolve({ opened: true, url: url });
+    }
+  };
+
   /* ---------- what index.html calls --------------------------------------- */
 
   window.claude = window.claude || {};
   window.claude.use = function (what) {
+    if (what === 'mcp') return Promise.resolve(mcpApi);
     if (what === 'db') return ready().then(function () { return dbApi; });
     if (what === 'user') return ready().then(function () { return userApi; });
     return Promise.reject(err('not_available', what + ' is not available in this version yet'));

@@ -42,8 +42,15 @@ Same email and password as Field Measure. Only accounts on the Job Book
 members list can see or change anything; `supabase-setup.sql` shows how to
 add someone. To sign out, open the app with `#signout` on the end of the address.
 
+## Send to Calendar
+
+The 📅 button works as before (date, time, how long, or all-day across several
+days), except the last step: it opens Google Calendar with the event filled in,
+and you tap Save. The note still gets its 📅 date.
+
 ## Not here yet
 
-Ask Claude, emailing a contact through Gmail, and sending an item to Google
-Calendar ran on claude.ai's built-in features. They're hidden in this version
-until they're rebuilt.
+Ask Claude and emailing a contact through Gmail ran on claude.ai's built-in
+features. Ask Claude is hidden and tapping an email address copies it, until
+they're rebuilt. Adding notes by voice works through the Job Book connector
+(`supabase/functions/jobbook-mcp`).

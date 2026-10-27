@@ -1556,9 +1556,13 @@
     };
     if (allDay) payload.allDay = true;
 
-    S.mcp.callTool("Google Calendar", "create_event", payload).then(function(){
+    S.mcp.callTool("Google Calendar", "create_event", payload).then(function(r){
       S.calBusy = false;
-      S.calStatus = { id:n.id, kind:"good", msg: allDay
+      /* On GitHub Pages the event opens filled-in in Google Calendar for one
+         tap on Save (store.js), rather than being sent behind the scenes. */
+      S.calStatus = { id:n.id, kind:"good", msg: (r && r.opened)
+        ? "Opened in Google Calendar — tap Save there."
+        : allDay
         ? (lastDay === dayOne ? "On your calendar, all day." : "On your calendar, " + dayLabel(startIso) + "–" + dayLabel(localDate(lastDay, "00:00")) + ".")
         : "On your calendar." };
       if (S.db) S.db.collection("notes").doc(n.id).update({
@@ -2006,7 +2010,7 @@
     // handing off to the mail app does not. With no Gmail to write to, the
     // address goes on the clipboard instead.
     e.preventDefault();
-    if (S.mcp){ openMail(raw); return; }
+    if (S.mcp && (!S.mcp.has || S.mcp.has("Gmail"))){ openMail(raw); return; }
     copyText(raw);
     copiedToast(raw);
   });
