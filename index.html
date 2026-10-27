@@ -1,0 +1,2832 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<!-- Home-screen app (GitHub Pages) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Job Book">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#eef0f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14181b" media="(prefers-color-scheme: dark)">
+<!-- Data: Supabase, answered through the same calls the app made on claude.ai -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+</head><body>
+<title>Job Book</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: single column, phone-first. Sticky bar, stacked job rows, composer above the list. */
+  :root{
+    --paper:#eef0f2;
+    --card:#ffffff;
+    --ink:#15191c;
+    --ink-soft:#5d666d;
+    --ink-faint:#8b949b;
+    --line:#d7dce0;
+    --line-soft:#e6eaed;
+    --accent:#15607a;
+    --accent-ink:#ffffff;
+    --accent-wash:#e2eef3;
+    --flag:#9a6508;
+    --flag-wash:#f8ecd4;
+    --done:#2f6b4f;
+    --done-wash:#e2eee8;
+    --danger:#a8372a;
+    --danger-wash:#f7e4e1;
+    --st-prospect:#6b4ea8;
+    --st-prospect-wash:#ece6f7;
+    --st-contracted:#15607a;
+    --st-contracted-wash:#e2eef3;
+    --st-active:#2f6b4f;
+    --st-active-wash:#e2eee8;
+    --shadow:0 1px 2px rgba(18,28,35,.08), 0 6px 18px rgba(18,28,35,.05);
+    --display:"Barlow Condensed","Haettenschweiler","Arial Narrow",sans-serif;
+    --body:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14181b;
+      --card:#1d2328;
+      --ink:#e9eef1;
+      --ink-soft:#a3adb5;
+      --ink-faint:#78838b;
+      --line:#2f383f;
+      --line-soft:#262e34;
+      --accent:#5fb3cf;
+      --accent-ink:#0c1518;
+      --accent-wash:#1b2f38;
+      --flag:#e0ab52;
+      --flag-wash:#33291a;
+      --done:#6fc39a;
+      --done-wash:#1b2d25;
+      --danger:#f08c7c;
+      --danger-wash:#36211e;
+      --st-prospect:#b9a2f0;
+      --st-prospect-wash:#272036;
+      --st-contracted:#5fb3cf;
+      --st-contracted-wash:#1b2f38;
+      --st-active:#6fc39a;
+      --st-active-wash:#1b2d25;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.28);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14181b;
+    --card:#1d2328;
+    --ink:#e9eef1;
+    --ink-soft:#a3adb5;
+    --ink-faint:#78838b;
+    --line:#2f383f;
+    --line-soft:#262e34;
+    --accent:#5fb3cf;
+    --accent-ink:#0c1518;
+    --accent-wash:#1b2f38;
+    --flag:#e0ab52;
+    --flag-wash:#33291a;
+    --done:#6fc39a;
+    --done-wash:#1b2d25;
+    --danger:#f08c7c;
+    --danger-wash:#36211e;
+    --st-prospect:#b9a2f0;
+    --st-prospect-wash:#272036;
+    --st-contracted:#5fb3cf;
+    --st-contracted-wash:#1b2f38;
+    --st-active:#6fc39a;
+    --st-active-wash:#1b2d25;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.28);
+    color-scheme:dark;
+  }
+
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:16px;
+    line-height:1.45;
+    -webkit-text-size-adjust:100%;
+  }
+  *{box-sizing:border-box}
+  button,input,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+  .topbar{
+    position:sticky;
+    top:env(safe-area-inset-top, 0px);
+    z-index:20;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+  }
+  .bar-inner{
+    display:flex;align-items:center;gap:10px;
+    max-width:720px;margin:0 auto;
+    padding:10px 16px;
+  }
+  .bar-inner h1{
+    margin:0;flex:1;min-width:0;
+    font-family:var(--display);
+    font-weight:700;font-size:1.5rem;letter-spacing:.02em;
+    text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .ghost-btn{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:8px;padding:9px 13px;
+    font-family:var(--display);font-size:1.05rem;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;
+    color:var(--ink);white-space:nowrap;
+  }
+  .ghost-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .bar-inner h1.is-book{cursor:pointer}
+  .bar-inner h1.is-book::after{
+    content:" ▾";font-size:.85em;color:var(--accent);
+  }
+  .bookpanel{
+    max-width:720px;margin:0 auto;
+    padding:0 16px 14px;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .booklist{display:flex;flex-direction:column;gap:6px}
+  .book-row{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    background:var(--card);border:1px solid var(--line);border-radius:8px;
+    padding:11px 13px;font-family:var(--display);font-size:1.2rem;font-weight:600;
+    letter-spacing:.01em;color:var(--ink);
+  }
+  .book-row .n{
+    margin-left:auto;font-size:.95rem;font-weight:600;
+    color:var(--ink-faint);font-variant-numeric:tabular-nums;
+  }
+  .book-row[aria-current="true"]{border-color:var(--accent);background:var(--accent-wash);color:var(--accent)}
+  .book-row[aria-current="true"] .n{color:var(--accent)}
+  .newbook{display:flex;gap:8px;flex-wrap:wrap}
+  .newbook input{
+    flex:1;min-width:150px;background:var(--card);
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  }
+  .back-btn{
+    background:none;border:0;padding:9px 6px 9px 0;
+    font-family:var(--display);font-size:1.05rem;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--accent);
+  }
+
+  .wrap{max-width:720px;margin:0 auto;padding-block:16px 48px;padding-left:16px;padding-right:16px}
+
+  .banner{
+    background:var(--flag-wash);border:1px solid var(--flag);
+    color:var(--ink);border-radius:10px;padding:12px 14px;
+    font-size:.92rem;margin-bottom:16px;
+  }
+
+  .tally{
+    font-family:var(--display);font-size:1.05rem;font-weight:600;
+    letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);
+    margin-bottom:12px;
+  }
+  .tally .flagged{color:var(--flag)}
+  .tally .hot{color:var(--danger)}
+
+  .seg{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .seg button{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:999px;padding:7px 14px;
+    font-size:.85rem;font-weight:500;color:var(--ink-soft);
+  }
+  .seg button[aria-pressed="true"]{
+    background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;
+  }
+
+  .stack{display:flex;flex-direction:column;gap:10px}
+
+  .job-row{
+    display:block;width:100%;text-align:left;
+    background:var(--card);border:1px solid var(--line);
+    border-left:4px solid var(--line);
+    border-radius:10px;padding:14px 15px;
+    box-shadow:var(--shadow);
+  }
+  .job-row.st-prospect{border-left-color:var(--st-prospect)}
+  .job-row.st-contracted{border-left-color:var(--st-contracted)}
+  .job-row.st-active{border-left-color:var(--st-active)}
+  .chip-prospect{background:var(--st-prospect-wash);color:var(--st-prospect);border-color:var(--st-prospect-wash)}
+  .chip-contracted{background:var(--st-contracted-wash);color:var(--st-contracted);border-color:var(--st-contracted-wash)}
+  .chip-active{background:var(--st-active-wash);color:var(--st-active);border-color:var(--st-active-wash)}
+  .statusbar{
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:11px 12px;margin-bottom:16px;box-shadow:var(--shadow);
+    display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+  }
+  .statusbar .lbl{
+    font-family:var(--display);font-size:.95rem;font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);
+    width:100%;
+  }
+  /* Four statuses share one row on a phone: flex:1 lets them size themselves
+     evenly instead of "Contracted" wrapping the row by a few pixels. */
+  .st-row{display:flex;gap:5px;width:100%}
+  .st-btn{
+    flex:1 1 0;min-width:0;text-align:center;white-space:nowrap;
+    background:transparent;border:1px solid var(--line);border-radius:999px;
+    padding:7px 4px;font-size:.78rem;font-weight:500;color:var(--ink-soft);
+  }
+  .st-btn[aria-pressed="true"].p{background:var(--st-prospect);border-color:var(--st-prospect);color:var(--paper);font-weight:600}
+  .st-btn[aria-pressed="true"].c{background:var(--st-contracted);border-color:var(--st-contracted);color:var(--paper);font-weight:600}
+  .st-btn[aria-pressed="true"].a{background:var(--st-active);border-color:var(--st-active);color:var(--paper);font-weight:600}
+  .st-btn[aria-pressed="true"].w{background:var(--flag);border-color:var(--flag);color:var(--paper);font-weight:600}
+  /* Permits: a second row inside the same box, not a separate card. Permitting
+     and job status are the same question -- where does this job stand. */
+  .permit-row{
+    width:100%;margin-top:10px;padding-top:10px;
+    border-top:1px solid var(--line-soft);
+    display:flex;gap:5px;flex-wrap:wrap;align-items:center;
+  }
+  .permit-row .plbl{
+    width:100%;margin-bottom:7px;
+    font-family:var(--display);font-size:.95rem;font-weight:600;
+    letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .permit-row .plbl .pcount{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .pm-btn{
+    background:transparent;border:1px solid var(--line);border-radius:999px;
+    padding:6px 11px;font-family:var(--display);font-size:.92rem;font-weight:600;
+    letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);
+    white-space:nowrap;touch-action:manipulation;
+  }
+  .pm-btn[data-state="done"]{background:var(--done);border-color:var(--done);color:var(--paper)}
+  /* N/A has to read as settled at a glance, not as an untouched item. Open is
+     the only outline-only state: done fills green, n/a fills grey. */
+  .pm-btn[data-state="na"]{
+    background:var(--line);border-color:var(--line);
+    color:var(--ink-soft);text-decoration:line-through;
+    text-decoration-thickness:1.5px;
+  }
+  .pm-btn.trades[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+  .pm-btn.trades .tn{font-variant-numeric:tabular-nums}
+  .trade-row{
+    width:100%;margin-top:7px;padding:9px 10px;
+    background:var(--accent-wash);border-radius:8px;
+    display:flex;gap:5px;flex-wrap:wrap;align-items:center;
+  }
+  .trade-row .tlbl{
+    width:100%;font-size:.78rem;color:var(--ink-soft);margin-bottom:3px;
+  }
+  .pm-hint{width:100%;margin-top:8px;font-size:.78rem;color:var(--ink-faint)}
+  .wait-note{
+    width:100%;margin-top:9px;padding:7px 10px;
+    background:var(--flag-wash);border-radius:8px;
+    font-size:.82rem;color:var(--flag);font-weight:500;
+  }
+  @media (hover:hover){ .job-row:hover{border-color:var(--accent)} }
+  .job-head{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .job-name{
+    flex:1;min-width:0;
+    font-family:var(--display);font-size:1.4rem;font-weight:600;
+    letter-spacing:.01em;line-height:1.15;
+    overflow-wrap:anywhere;
+  }
+  .count{
+    font-family:var(--display);font-size:1.25rem;font-weight:700;
+    color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .count.zero{color:var(--ink-faint)}
+  .job-sub{margin-top:5px;font-size:.9rem;color:var(--ink-soft);overflow-wrap:anywhere}
+  .job-meta{margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+  .chip{
+    display:inline-block;border-radius:999px;
+    padding:2px 9px;font-size:.72rem;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;
+    border:1px solid transparent;
+  }
+  .chip-quiet{background:var(--flag-wash);color:var(--flag);border-color:var(--flag)}
+  .chip-urgent{background:var(--danger);color:var(--paper);border-color:var(--danger)}
+  .chip-time{background:transparent;color:var(--ink-faint);border-color:var(--line)}
+  .chip-who{background:var(--accent-wash);color:var(--accent);border-color:var(--accent-wash)}
+  .chip-done{background:var(--done-wash);color:var(--done);border-color:var(--done-wash)}
+
+  .composer{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:12px;margin-bottom:18px;box-shadow:var(--shadow);
+  }
+  .composer textarea{
+    width:100%;min-height:28px;height:28px;resize:vertical;
+    background:transparent;border:0;padding:2px;
+    font-size:1.02rem;line-height:1.4;
+  }
+  .composer textarea::placeholder{color:var(--ink-faint)}
+  .composer textarea:focus{outline:none}
+  .composer-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;padding-top:8px;border-top:1px solid var(--line-soft)}
+  .composer-foot .spacer{flex:1}
+  /* Urgent: armed before you tap Add, so the item lands hot. */
+  .urgent-btn{
+    background:transparent;border:1px solid var(--line);border-radius:999px;
+    padding:5px 13px;font-size:.78rem;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);
+    touch-action:manipulation;
+  }
+  .urgent-btn[aria-pressed="true"]{
+    background:var(--danger);border-color:var(--danger);color:var(--paper);
+  }
+  .solid-btn{
+    background:var(--accent);border:1px solid var(--accent);color:var(--accent-ink);
+    border-radius:8px;padding:10px 18px;
+    font-family:var(--display);font-size:1.1rem;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;
+  }
+  .solid-btn[disabled]{opacity:.45;cursor:default}
+
+  .note{
+    display:flex;gap:12px;align-items:flex-start;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:10px;padding:12px 13px;box-shadow:var(--shadow);
+  }
+  .note.is-urgent{
+    border-color:var(--danger);
+    border-left:4px solid var(--danger);
+    padding-left:10px;
+  }
+  .mini-btn.hot{background:var(--danger);color:var(--paper);border-color:var(--danger)}
+  .mini-btn.hot:hover{border-color:var(--danger);color:var(--paper)}
+  /* Waiting: somebody else's move. Flag colour, sinks to the bottom of the
+     job, and stays out of the open count -- you can't work it today. Declared
+     after is-urgent so a waiting item reads as waiting even if also urgent. */
+  .note.is-waiting{
+    border-color:var(--flag);
+    border-left:4px solid var(--flag);
+    padding-left:10px;
+  }
+  .note.is-waiting .note-text{color:var(--ink-soft)}
+  .mini-btn.wait{background:var(--flag);color:var(--paper);border-color:var(--flag)}
+  .mini-btn.wait:hover{border-color:var(--flag);color:var(--paper)}
+  .tick{
+    flex:none;width:30px;height:30px;margin-top:1px;
+    border-radius:50%;border:2px solid var(--line);
+    background:transparent;display:flex;align-items:center;justify-content:center;
+    font-size:1rem;line-height:1;color:transparent;
+  }
+  .tick:hover{border-color:var(--accent)}
+  .note.is-done .tick{border-color:var(--done);background:var(--done-wash);color:var(--done)}
+  .note-body{flex:1;min-width:0}
+  .note-text{overflow-wrap:anywhere;white-space:pre-wrap;font-weight:500}
+  .note.is-done .note-text{color:var(--ink-soft);text-decoration:line-through}
+  .note-bullets{margin:7px 0 0;padding-left:18px;color:var(--ink-soft);font-size:.94rem}
+  .note-bullets li{margin:3px 0;overflow-wrap:anywhere}
+  .note-bullets li::marker{color:var(--ink-faint)}
+  .note-body a.lnk{
+    color:var(--accent);
+    text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;
+    overflow-wrap:anywhere;
+    padding:4px 2px;margin:-4px -2px;
+    /* iOS: keep a tap on the link from turning into a text selection or a
+       press-and-hold callout, and skip the double-tap-zoom wait. */
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:rgba(21,96,122,.22);
+  }
+  .note.is-done .note-body a.lnk{color:var(--ink-faint)}
+  .note.is-done .note-bullets{color:var(--ink-faint)}
+  .note-meta{margin-top:7px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .mini-btn{
+    background:transparent;border:1px solid var(--line);
+    border-radius:999px;padding:2px 9px;
+    font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .mini-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .mini-btn.assigned{background:var(--accent-wash);color:var(--accent);border-color:var(--accent-wash)}
+  .mini-btn.danger{color:var(--danger);border-color:var(--danger)}
+  .assign-row{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .note-open{cursor:text;border-radius:6px}
+  /* Touch screens fire :hover on tap and leave it stuck, which reads as a
+     selection box around the whole note. Mouse pointers only. */
+  @media (hover:hover){
+    .note-open:hover{background:var(--line-soft)}
+  }
+  .edit-area{
+    width:100%;min-height:90px;resize:vertical;
+    background:transparent;border:1px solid var(--line);border-radius:8px;
+    padding:9px 10px;font-size:1.02rem;line-height:1.4;
+  }
+  .edit-area:focus{outline:none;border-color:var(--accent)}
+  .edit-foot{display:flex;gap:8px;align-items:center;margin-top:9px}
+  .edit-foot .spacer{flex:1}
+  .solid-btn.small{padding:7px 14px;font-size:.95rem}
+  .cal-row{
+    margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;
+    padding-top:9px;border-top:1px solid var(--line-soft);
+  }
+  .cal-row input, .cal-row select{
+    background:transparent;border:1px solid var(--line);border-radius:8px;
+    padding:7px 9px;font-size:.92rem;min-width:0;
+  }
+  .cal-row input:focus, .cal-row select:focus{outline:none;border-color:var(--accent)}
+  .cal-row .to{font-size:.85rem;color:var(--ink-faint);align-self:center}
+  .cal-status{width:100%;font-size:.85rem;color:var(--ink-soft)}
+  .cal-status.bad{color:var(--flag)}
+  .cal-status.good{color:var(--done)}
+
+  .section-head{
+    display:flex;align-items:center;gap:10px;
+    margin:26px 0 12px;
+  }
+  .section-head h2{
+    margin:0;font-family:var(--display);font-size:1.15rem;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);
+  }
+  .section-head .rule{flex:1;height:1px;background:var(--line)}
+
+  .empty{
+    border:1px dashed var(--line);border-radius:10px;
+    padding:22px 18px;text-align:left;color:var(--ink-soft);
+    font-size:.95rem;background:transparent;
+  }
+  .empty strong{display:block;font-family:var(--display);font-size:1.25rem;
+    letter-spacing:.02em;color:var(--ink);font-weight:600;margin-bottom:4px}
+
+  .newjob{
+    background:var(--card);border:1px solid var(--accent);
+    border-radius:10px;padding:12px;margin-bottom:16px;
+    display:flex;gap:8px;flex-wrap:wrap;
+  }
+  .newjob input{
+    flex:1;min-width:150px;background:transparent;
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  }
+
+  .ask-fab{
+    position:fixed;right:16px;
+    bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index:30;
+    background:var(--accent);border:1px solid var(--accent);color:var(--accent-ink);
+    border-radius:999px;padding:13px 20px;
+    font-family:var(--display);font-size:1.15rem;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;
+    box-shadow:0 4px 14px rgba(0,0,0,.22);
+  }
+  .ask-sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:var(--card);border-top:1px solid var(--line);
+    border-radius:14px 14px 0 0;
+    box-shadow:0 -6px 24px rgba(0,0,0,.18);
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    max-height:72vh;display:flex;flex-direction:column;gap:10px;
+  }
+  .ask-head{display:flex;align-items:center;gap:10px}
+  .ask-head h2{
+    margin:0;flex:1;font-family:var(--display);font-size:1.25rem;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;color:var(--ink);
+  }
+  .ask-log{
+    flex:1;overflow-y:auto;min-height:0;
+    display:flex;flex-direction:column;gap:9px;
+    padding:2px 0;
+  }
+  .ask-hint{color:var(--ink-soft);font-size:.92rem}
+  .ask-hint code{
+    background:var(--line-soft);border-radius:4px;padding:1px 5px;font-size:.88em;
+  }
+  /* The hint is permanent furniture under Close, not a filler for an empty
+     log -- so it holds its own line and the log collapses when there's
+     nothing in it. */
+  .ask-sheet > .ask-hint{margin:0;flex:none}
+  .ask-log:empty{display:none}
+  .bubble{border-radius:10px;padding:9px 11px;font-size:.96rem;max-width:92%;overflow-wrap:anywhere;white-space:pre-wrap}
+  .bubble.me{align-self:flex-end;background:var(--accent-wash);color:var(--ink)}
+  .bubble.them{align-self:flex-start;background:var(--line-soft);color:var(--ink)}
+  .bubble.err{align-self:flex-start;background:var(--danger-wash);color:var(--danger);border:1px solid var(--danger)}
+  .bubble.note{align-self:flex-start;background:var(--accent-wash);color:var(--ink-soft);font-style:italic}
+  .ask-foot{display:flex;gap:8px;align-items:flex-end}
+  .ask-foot textarea{
+    flex:1;min-width:0;min-height:46px;max-height:120px;resize:none;
+    background:transparent;border:1px solid var(--line);border-radius:10px;
+    padding:11px 12px;font-size:1.02rem;line-height:1.35;
+  }
+  .ask-foot textarea:focus{outline:none;border-color:var(--accent)}
+
+  .mail-body{
+    flex:1;overflow-y:auto;min-height:0;
+    display:flex;flex-direction:column;gap:9px;padding:2px 0;
+  }
+  .mail-to{
+    font-size:.9rem;color:var(--ink-soft);overflow-wrap:anywhere;
+  }
+  .mail-to strong{color:var(--ink);font-weight:600}
+  .mail-body input[type="text"], .mail-body textarea{
+    width:100%;background:transparent;border:1px solid var(--line);
+    border-radius:10px;padding:11px 12px;font-size:1.02rem;line-height:1.35;
+  }
+  #mailBody{min-height:120px;resize:vertical}
+  /* The subject grows to fit instead of scrolling sideways out of view. */
+  #mailSubject{min-height:0;resize:none;overflow:hidden}
+  .mail-body input:focus, .mail-body textarea:focus{outline:none;border-color:var(--accent)}
+  .mail-ai{
+    display:flex;gap:8px;align-items:center;
+    padding-top:9px;border-top:1px solid var(--line-soft);
+  }
+  .mail-ai input{flex:1;min-width:0}
+  .mail-ai .mini-btn{white-space:nowrap;padding:9px 12px}
+  .mail-note{font-size:.82rem;color:var(--ink-faint)}
+  .ask-foot .spacer{flex:1}
+  .ask-foot .mini-btn{padding:9px 13px;white-space:nowrap}
+  .solid-btn.small.arm{background:var(--flag);border-color:var(--flag);color:var(--paper)}
+
+  .jobfoot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:18px;flex-wrap:wrap}
+  /* The job's folder on the F: drive. Job Book is where this is set, so
+     filing receipts can read the destination instead of guessing from the
+     job's name -- the two rarely match. */
+  .folder-row{width:100%;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+  .folder-row .lbl{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+  .folder-path{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.78rem;color:var(--ink);word-break:break-all;flex:1;min-width:180px;
+  }
+  .folder-path.unset{color:var(--ink-faint);font-style:italic;font-family:inherit}
+  .folder-edit{width:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .folder-edit input{
+    flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;background:var(--paper);color:var(--ink);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.78rem;
+  }
+  /* Renaming a job. There is no row for the name when it is not being edited
+     -- the name is already the title at the top of the screen. The box only
+     appears once Rename is tapped. The folder is stored separately, so a
+     rename never moves where the job's receipts file. */
+  .name-edit{width:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+  .name-edit input{
+    flex:1;min-width:200px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;background:var(--paper);color:var(--ink);font-size:1rem;
+  }
+  .text-btn{background:none;border:0;padding:6px 0;color:var(--ink-faint);font-size:.85rem;text-decoration:underline}
+  .text-btn:hover{color:var(--flag)}
+  .text-btn.danger:hover{color:var(--danger)}
+  .danger-box{
+    width:100%;background:var(--danger-wash);border:1px solid var(--danger);
+    border-radius:10px;padding:14px;
+  }
+  .danger-msg{font-size:.95rem;color:var(--ink);margin-bottom:12px}
+  .danger-msg strong{font-weight:600}
+  .danger-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* Shown only if a tapped phone/email link did not hand off to the phone. */
+  .linktoast{
+    position:fixed;left:16px;right:16px;
+    bottom:calc(76px + env(safe-area-inset-bottom, 0px));
+    z-index:50;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 6px 20px rgba(0,0,0,.28);
+    padding:10px 12px;display:flex;gap:9px;align-items:center;
+    font-size:.88rem;color:var(--ink-soft);
+  }
+  .linktoast .v{
+    flex:1;min-width:0;color:var(--ink);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .solid-btn.danger{background:var(--danger);border-color:var(--danger);color:var(--paper)}
+</style>
+
+<header class="topbar">
+  <div class="bar-inner">
+    <button id="backBtn" class="back-btn" hidden>&lsaquo; Jobs</button>
+    <h1 id="topTitle">Job Book</h1>
+    <button id="addJobBtn" class="ghost-btn">+ Job</button>
+  </div>
+  <div id="bookPanel" class="bookpanel" hidden>
+    <div id="bookList" class="booklist"></div>
+    <div class="newbook">
+      <input id="newBookName" type="text" placeholder="New book — e.g. BuildWrite Projects" autocomplete="off">
+      <button id="newBookSave" class="solid-btn small">Add</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="homeView">
+    <div id="newJobForm" class="newjob" hidden>
+      <input id="newJobName" type="text" placeholder="Job name — e.g. Hollis Kitchen" autocomplete="off">
+      <button id="newJobSave" class="solid-btn">Add</button>
+    </div>
+    <p id="tally" class="tally">Loading your jobs&hellip;</p>
+    <div id="homeFilter" class="seg"></div>
+    <div id="jobList" class="stack"></div>
+    <div id="archivedWrap" hidden>
+      <div class="section-head"><h2 id="archivedHead">Archived</h2><span class="rule"></span>
+        <button id="archToggle" class="mini-btn">Show</button></div>
+      <div id="archivedList" class="stack" hidden></div>
+    </div>
+  </section>
+
+  <section id="jobView" hidden>
+    <div id="statusBar" class="statusbar"></div>
+    <div class="composer">
+      <textarea id="noteInput" placeholder="What's next on this job?"></textarea>
+      <div class="composer-foot">
+        <span id="composerHint" class="chip chip-time">Enter = new bullet</span>
+        <button id="urgentToggle" class="urgent-btn" aria-pressed="false">Urgent</button>
+        <span class="spacer"></span>
+        <button id="noteSave" class="solid-btn" disabled>Add</button>
+      </div>
+    </div>
+    <div id="jobFilter" class="seg"></div>
+    <div id="openList" class="stack"></div>
+    <div id="doneWrap" hidden>
+      <div class="section-head"><h2 id="doneHead">Done</h2><span class="rule"></span>
+        <button id="doneToggle" class="mini-btn">Show</button></div>
+      <div id="doneList" class="stack" hidden></div>
+    </div>
+    <div id="jobFoot" class="jobfoot"></div>
+  </section>
+</main>
+
+<button id="askFab" class="ask-fab" hidden>Ask Claude</button>
+<div id="askSheet" class="ask-sheet" hidden>
+  <div class="ask-head">
+    <h2>Ask Claude</h2>
+    <button id="askStop" class="mini-btn" hidden>Stop</button>
+    <button id="askClose" class="mini-btn">Close</button>
+  </div>
+  <p class="ask-hint">Say it rough &#8212; <code>add order decking to Carpenter</code>, or <code>what's open on Golson</code>.</p>
+  <div id="askLog" class="ask-log"></div>
+  <div class="ask-foot">
+    <textarea id="askInput" placeholder="Say what you need&#8230;" rows="1"></textarea>
+    <button id="askSend" class="solid-btn small">Send</button>
+  </div>
+</div>
+
+<div id="mailSheet" class="ask-sheet" hidden>
+  <div class="ask-head">
+    <h2>New email</h2>
+    <button id="mailClose" class="mini-btn">Close</button>
+  </div>
+  <div class="mail-body">
+    <p class="mail-to" id="mailTo"></p>
+    <textarea id="mailSubject" placeholder="Subject" rows="1" autocomplete="off"></textarea>
+    <textarea id="mailBody" placeholder="Type or dictate the message."></textarea>
+    <div class="mail-ai">
+      <input id="mailAsk" type="text" placeholder="Or say it rough — Claude writes it" autocomplete="off">
+      <button id="mailWrite" class="mini-btn">Write it</button>
+    </div>
+    <p class="cal-status" id="mailStatus"></p>
+  </div>
+  <div class="ask-foot">
+    <span class="spacer"></span>
+    <button id="mailDraft" class="mini-btn">Save draft</button>
+    <button id="mailSend" class="solid-btn small">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var S = {
+    view:"home", jobId:null,
+    jobs:[], notes:[], people:[], books:[], bookId:null, bookPanel:false,
+    folderEdit:null, nameEdit:null,
+    myId:null, profiles:{},
+    db:null, user:null, mcp:null, calServer:null,
+    canWrite:true, loaded:false,
+    filter:"all", homeFilter:"all", showDone:false, showArchived:false, tradesOpen:false,
+    pendingDelete:null, assignOpen:null, confirmArchive:false, confirmDelete:false, pendingJobDelete:null,
+    editing:null, editDraft:"", editCaret:null, urgentDraft:false,
+    calOpen:null, calDate:"", calTime:"08:00", calDur:"60", calEnd:"",
+    calStatus:null, calBusy:false,
+    sample:null, askOpen:false, askTurns:[], askBusy:false, askLive:"", askErr:null, askCtl:null,
+    askNote:null, askFade:null, askSession:0, askToolRan:false
+  };
+
+  var el = function(id){ return document.getElementById(id); };
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function nowIso(){ return new Date().toISOString(); }
+  function newId(){
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "x" + Date.now().toString(36) + Math.random().toString(36).slice(2,9);
+  }
+  function days(iso){
+    if (!iso) return Infinity;
+    var t = Date.parse(iso);
+    if (isNaN(t)) return Infinity;
+    return (Date.now() - t) / 86400000;
+  }
+  function ago(iso){
+    var d = days(iso);
+    if (d === Infinity) return "";
+    if (d < 0.04) return "just now";
+    if (d < 1) return Math.max(1, Math.round(d * 24)) + "h ago";
+    if (d < 2) return "yesterday";
+    if (d < 14) return Math.round(d) + "d ago";
+    if (d < 60) return Math.round(d / 7) + "w ago";
+    return Math.round(d / 30) + "mo ago";
+  }
+  function firstName(id){
+    if (!id) return "";
+    if (id === S.myId) return "You";
+    var p = S.profiles[id];
+    var n = (p && p.name) || "";
+    if (!n) {
+      var r = null, i;
+      for (i = 0; i < S.people.length; i++) if (S.people[i].id === id) r = S.people[i];
+      n = (r && r.name) || "";
+    }
+    if (!n) return "Teammate";
+    return n.split(" ")[0];
+  }
+  function otherPerson(){
+    var out = [], i;
+    for (i = 0; i < S.people.length; i++) if (S.people[i].id !== S.myId) out.push(S.people[i]);
+    return out;
+  }
+
+  var BULLET = "•";
+
+  /* ---------- tap an address to write to it ---------- */
+  // An email address typed into a note becomes a link; tapping it opens the
+  // compose sheet. The boundary checks keep an address that is part of a longer
+  // run of text from being picked up.
+  var LINK_RE = new RegExp("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9][A-Za-z0-9.\\-]*\\.[A-Za-z]{2,}", "g");
+
+  function linkify(raw){
+    var s = String(raw == null ? "" : raw);
+    var out = "", last = 0, m, tok, i0, i1, prev, next, html;
+    LINK_RE.lastIndex = 0;
+    while ((m = LINK_RE.exec(s)) !== null){
+      tok = m[0];
+      i0 = m.index;
+      i1 = i0 + tok.length;
+      if (!tok.length){ LINK_RE.lastIndex++; continue; }
+      prev = i0 > 0 ? s.charAt(i0 - 1) : " ";
+      next = i1 < s.length ? s.charAt(i1) : " ";
+      html = null;
+      if (!/[A-Za-z0-9._%+\-@]/.test(prev) && !/[A-Za-z0-9\-@]/.test(next)){
+        html = "<a class=\"lnk\" data-raw=\"" + esc(tok) + "\" href=\"mailto:" +
+          esc(encodeURI(tok)) + "\">" + esc(tok) + "</a>";
+      }
+      out += esc(s.slice(last, i0)) + (html || esc(tok));
+      last = i1;
+    }
+    return out + esc(s.slice(last));
+  }
+
+  function headLine(text){
+    var lines = String(text == null ? "" : text).split("\n");
+    for (var i = 0; i < lines.length; i++){
+      var l = lines[i].trim();
+      if (l) return l.replace(/^•\s*/, "");
+    }
+    return "";
+  }
+  function bodyHtml(text){
+    var lines = String(text == null ? "" : text).split("\n");
+    var head = "", bullets = [], seenHead = false, i, l;
+    for (i = 0; i < lines.length; i++){
+      l = lines[i].trim();
+      if (!l) continue;
+      if (!seenHead && l.indexOf(BULLET) !== 0){ head = l; seenHead = true; continue; }
+      bullets.push(l.replace(/^•\s*/, ""));
+      seenHead = true;
+    }
+    if (!head && bullets.length){ head = bullets.shift(); }
+    var out = "<div class=\"note-text\">" + linkify(head) + "</div>";
+    if (bullets.length){
+      out += "<ul class=\"note-bullets\">" + bullets.map(function(b){
+        return "<li>" + linkify(b) + "</li>";
+      }).join("") + "</ul>";
+    }
+    return out;
+  }
+  function cleanDraft(t){
+    var lines = String(t).split("\n").map(function(l){ return l.replace(/\s+$/, ""); });
+    while (lines.length && /^(•\s*)?$/.test(lines[lines.length - 1])) lines.pop();
+    while (lines.length && /^(•\s*)?$/.test(lines[0])) lines.shift();
+    return lines.join("\n");
+  }
+
+  function pad(n){ return (n < 10 ? "0" : "") + n; }
+  function isoWithOffset(d){
+    var off = -d.getTimezoneOffset();
+    var sign = off >= 0 ? "+" : "-";
+    var ab = Math.abs(off);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      "T" + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":00" +
+      sign + pad(Math.floor(ab / 60)) + ":" + pad(ab % 60);
+  }
+  function localDate(dateStr, timeStr){
+    var dp = String(dateStr).split("-"), tp = String(timeStr).split(":");
+    if (dp.length !== 3 || tp.length < 2) return null;
+    var d = new Date(+dp[0], +dp[1] - 1, +dp[2], +tp[0], +tp[1], 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function tomorrowStr(){
+    var d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  var MONS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function whenLabel(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var h = d.getHours(), ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12; if (!h) h = 12;
+    return MONS[d.getMonth()] + " " + d.getDate() + ", " + h + ":" + pad(d.getMinutes()) + " " + ampm;
+  }
+  function dayLabel(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return MONS[d.getMonth()] + " " + d.getDate();
+  }
+  function dateStr(d){
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function addDays(dateString, n){
+    var pr = String(dateString).split("-");
+    var d = new Date(+pr[0], +pr[1] - 1, +pr[2]);
+    d.setDate(d.getDate() + n);
+    return dateStr(d);
+  }
+  // What the note's calendar chip reads.
+  function schedLabel(n){
+    if (!n.scheduledAt) return "";
+    if (!n.allDay) return whenLabel(n.scheduledAt);
+    var start = dayLabel(n.scheduledAt);
+    if (!n.scheduledEnd || n.scheduledEnd === n.scheduledAt) return start + " (all day)";
+    return start + "\u2013" + dayLabel(n.scheduledEnd);
+  }
+  var DURATIONS = [
+    ["30", "30 min"],
+    ["60", "1 hour"],
+    ["120", "2 hours"],
+    ["240", "Half day"],
+    ["allday", "All day"]
+  ];
+  function bulletsOf(text){
+    var lines = String(text == null ? "" : text).split("\n"), out = [], i, l, seen = false;
+    for (i = 0; i < lines.length; i++){
+      l = lines[i].trim();
+      if (!l) continue;
+      if (!seen && l.indexOf(BULLET) !== 0){ seen = true; continue; }
+      out.push(l.replace(/^•\s*/, ""));
+      seen = true;
+    }
+    return out;
+  }
+
+  var STATUSES = [
+    { id:"prospect",   label:"Prospect",   cls:"p" },
+    { id:"contracted", label:"Contracted", cls:"c" },
+    { id:"active",     label:"Active",     cls:"a" }
+  ];
+  function statusDef(id){
+    for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].id === id) return STATUSES[i];
+    return null;
+  }
+
+  /* Permits, in the order they actually come up on an NC residential job.
+     BEFORE holds the five that have to be settled before work starts --
+     clearing all five on a contracted job is what flips it to Active.
+     TRADES are pulled by each sub once the building permit is issued, in no
+     fixed order among themselves, so they sit behind one dropdown and never
+     gate the flip. Every item cycles open -> done -> n/a; n/a counts as
+     cleared but stays visibly different so "didn't need it" never reads as
+     "got it" six months later. */
+  var PERMITS_BEFORE = [
+    { id:"zoning",   label:"Zoning",   full:"Zoning permit -- town if inside limits or its ETJ, county otherwise" },
+    { id:"esa",      label:"ESA",      full:"Existing septic approval -- county Environmental Health" },
+    { id:"driveway", label:"Driveway", full:"NCDOT driveway permit -- only if access on a state road changes" },
+    { id:"flood",    label:"Flood",    full:"Floodplain / erosion control" },
+    { id:"building", label:"Building", full:"Building permit -- zoning and septic are prerequisites" }
+  ];
+  var PERMITS_TRADES = [
+    { id:"electrical", label:"Electrical", full:"Electrical permit" },
+    { id:"plumbing",   label:"Plumbing",   full:"Plumbing permit" },
+    { id:"mechanical", label:"Mechanical", full:"Mechanical / HVAC permit" },
+    { id:"gas",        label:"Gas",        full:"Gas piping permit" }
+  ];
+  var PERMITS_AFTER = [
+    { id:"final", label:"Final / CO", full:"Final inspection and certificate of occupancy or compliance" }
+  ];
+  var PERMITS_ALL = PERMITS_BEFORE.concat(PERMITS_TRADES, PERMITS_AFTER);
+
+  function permitState(job, id){
+    var p = job && job.permits;
+    return (p && p[id]) || "";
+  }
+  function nextPermitState(s){ return s === "done" ? "na" : (s === "na" ? "" : "done"); }
+  function permitCleared(job, id){ return permitState(job, id) !== ""; }
+  function permitClearedCount(job, list){
+    var n = 0;
+    list.forEach(function(p){ if (permitCleared(job, p.id)) n++; });
+    return n;
+  }
+  function beforeStartClear(job){
+    return permitClearedCount(job, PERMITS_BEFORE) === PERMITS_BEFORE.length;
+  }
+
+  function permitBtn(job, p){
+    var st = permitState(job, p.id);
+    return "<button class=\"pm-btn\" data-permit=\"" + p.id + "\" data-state=\"" + st +
+      "\" title=\"" + esc(p.full) + "\">" + esc(p.label) + "</button>";
+  }
+
+  /* Permits don't exist as a question until there's a contract, so the row
+     stays hidden on a prospect -- its appearing at Contracted is itself the
+     reminder that permitting is now in play. It stays up through Active
+     because trades and Final/CO all land after work starts. The last clause
+     is a safety net: a job that somehow carries permit marks without a
+     status still shows them rather than hiding data. */
+  function showPermits(job){
+    return job.status === "contracted" || job.status === "active" ||
+      permitClearedCount(job, PERMITS_ALL) > 0;
+  }
+
+  function permitRowHtml(job, doneCount){
+    if (!showPermits(job)) return "";
+    var tradesDone = permitClearedCount(job, PERMITS_TRADES);
+    var html = "<div class=\"permit-row\">" +
+      "<span class=\"plbl\">Permits <span class=\"pcount\">" + doneCount + "/" + PERMITS_ALL.length + "</span></span>" +
+      PERMITS_BEFORE.map(function(p){ return permitBtn(job, p); }).join("") +
+      "<button class=\"pm-btn trades\" data-trades=\"1\" aria-expanded=\"" + (S.tradesOpen ? "true" : "false") +
+        "\">Trades <span class=\"tn\">" + tradesDone + "/4</span> " + (S.tradesOpen ? "▴" : "▾") + "</button>" +
+      PERMITS_AFTER.map(function(p){ return permitBtn(job, p); }).join("");
+
+    if (S.tradesOpen){
+      html += "<div class=\"trade-row\">" +
+        "<span class=\"tlbl\">Pulled by each sub once the building permit is issued — any order.</span>" +
+        PERMITS_TRADES.map(function(p){ return permitBtn(job, p); }).join("") +
+        "</div>";
+    }
+
+    /* Only say what the next tap will actually do. A prospect never auto-flips:
+       the work has to be signed first. */
+    if (job.status === "contracted" && !beforeStartClear(job)){
+      html += "<div class=\"pm-hint\">Clears to Active when the first five are all done or n/a.</div>";
+    } else if (job.status !== "contracted" && job.status !== "active" && beforeStartClear(job)){
+      html += "<div class=\"pm-hint\">Pre-start permits are clear — mark it Contracted and it goes Active.</div>";
+    }
+    return html + "</div>";
+  }
+
+  function defaultBookId(){ return S.books.length ? S.books[0].id : ""; }
+  function bookOf(job){ return job.bookId || defaultBookId(); }
+  function currentBook(){
+    var i;
+    for (i = 0; i < S.books.length; i++) if (S.books[i].id === S.bookId) return S.books[i];
+    return null;
+  }
+  function bookName(){
+    var b = currentBook();
+    return b ? b.name : "Job Book";
+  }
+  function rememberBook(id){
+    try { localStorage.setItem("jobbook.book", id); } catch (e) { /* ignore */ }
+  }
+  function recallBook(){
+    try { return localStorage.getItem("jobbook.book"); } catch (e) { return null; }
+  }
+  function booksJobs(bookId){
+    return S.jobs.filter(function(j){ return !j.archived && bookOf(j) === bookId; });
+  }
+
+  function jobNotes(jobId){
+    var out = [], i;
+    for (i = 0; i < S.notes.length; i++) if (S.notes[i].jobId === jobId) out.push(S.notes[i]);
+    return out;
+  }
+  function lastTouch(job){
+    var best = job.createdAt || "";
+    var ns = jobNotes(job.id), i, n, c;
+    for (i = 0; i < ns.length; i++){
+      n = ns[i];
+      c = n.doneAt && n.doneAt > (n.createdAt || "") ? n.doneAt : (n.createdAt || "");
+      if (c > best) best = c;
+    }
+    return best;
+  }
+  // Waiting items sink to the bottom (not your move), urgent items float to
+  // the top; everything else keeps the order it came in.
+  function byHeat(a, b){
+    var wa = (!a.done && a.waiting) ? 1 : 0;
+    var wb = (!b.done && b.waiting) ? 1 : 0;
+    if (wa !== wb) return wa - wb;
+    var ua = (!a.done && !a.waiting && a.urgent) ? 0 : 1;
+    var ub = (!b.done && !b.waiting && b.urgent) ? 0 : 1;
+    if (ua !== ub) return ua - ub;
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
+  }
+  // The job's Waiting flag is derived, never stored: a job is waiting when
+  // something open on it is waiting. One place to set it, so it can't drift.
+  function jobWaiting(job){
+    var ns = jobNotes(job.id), i;
+    for (i = 0; i < ns.length; i++) if (!ns[i].done && ns[i].waiting) return true;
+    return false;
+  }
+  function waitingCount(job){
+    return jobNotes(job.id).filter(function(n){ return !n.done && n.waiting; }).length;
+  }
+
+  function matchesFilter(n){
+    if (S.filter === "mine") return n.assignedTo === S.myId;
+    if (S.filter === "theirs") return !!n.assignedTo && n.assignedTo !== S.myId;
+    return true;
+  }
+
+  function setBanner(msg){
+    var b = el("banner");
+    if (!msg){ b.hidden = true; b.textContent = ""; return; }
+    b.hidden = false;
+    b.textContent = msg;
+  }
+  function lockWrites(){
+    S.canWrite = false;
+    el("addJobBtn").hidden = true;
+    el("noteSave").disabled = true;
+    el("noteInput").disabled = true;
+    el("noteInput").placeholder = "Read-only — ask Stephen for Contributor access to add notes.";
+  }
+
+  /* ---------- rendering ---------- */
+
+  function render(){
+    if (S.view === "job" && !S.jobs.some(function(j){ return j.id === S.jobId; })) S.view = "home";
+    el("homeView").hidden = S.view !== "home";
+    el("jobView").hidden = S.view !== "job";
+    el("backBtn").hidden = S.view !== "job";
+    el("addJobBtn").hidden = S.view !== "home" || !S.canWrite;
+    if (S.view === "home") renderHome(); else renderJob();
+    restoreEditor();
+  }
+
+  function autosizeEl(ta, min){
+    ta.style.height = "auto";
+    ta.style.height = Math.max(min || 90, ta.scrollHeight) + "px";
+  }
+  function restoreEditor(){
+    if (!S.editing) return;
+    var ta = document.querySelector("textarea[data-edit]");
+    if (!ta) return;
+    ta.value = S.editDraft;
+    autosizeEl(ta);
+    var pos = S.editCaret == null ? ta.value.length : S.editCaret;
+    ta.focus();
+    try { ta.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+  }
+
+  function renderBookPanel(){
+    el("bookPanel").hidden = !(S.bookPanel && S.view === "home");
+    if (!S.bookPanel || S.view !== "home") return;
+    el("bookList").innerHTML = S.books.map(function(b){
+      var open = 0;
+      booksJobs(b.id).forEach(function(j){
+        open += jobNotes(j.id).filter(function(n){ return !n.done && !n.waiting; }).length;
+      });
+      return "<button class=\"book-row\" data-book=\"" + esc(b.id) + "\" aria-current=\"" +
+        (b.id === S.bookId) + "\">" + esc(b.name) +
+        "<span class=\"n\">" + open + "</span></button>";
+    }).join("");
+    el("newBookSave").hidden = !S.canWrite;
+    el("newBookName").hidden = !S.canWrite;
+  }
+
+  function renderHome(){
+    el("topTitle").textContent = bookName();
+    el("topTitle").className = S.books.length ? "is-book" : "";
+    renderBookPanel();
+    var active = booksJobs(S.bookId);
+    var archived = S.jobs.filter(function(j){ return j.archived && bookOf(j) === S.bookId; });
+
+    // Oldest job first: the order they came in is the working order of priority.
+    active.sort(function(a,b){ return (a.createdAt || "").localeCompare(b.createdAt || ""); });
+
+    var openTotal = 0, quietCount = 0, hotTotal = 0, waitTotal = 0;
+    active.forEach(function(j){
+      var o = jobNotes(j.id).filter(function(n){ return !n.done; });
+      /* Open means workable. Waiting items are counted on their own so the
+         number on the tally is only things he can actually move today. */
+      openTotal += o.filter(function(n){ return !n.waiting; }).length;
+      waitTotal += o.filter(function(n){ return n.waiting; }).length;
+      hotTotal += o.filter(function(n){ return n.urgent && !n.waiting; }).length;
+      if (days(lastTouch(j)) > 7) quietCount++;
+    });
+
+    var counts = { waiting:0 };
+    active.forEach(function(j){
+      if (j.status) counts[j.status] = (counts[j.status] || 0) + 1;
+      if (jobWaiting(j)) counts.waiting++;
+    });
+    var picks = [["all","All"]];
+    STATUSES.forEach(function(st){ if (counts[st.id]) picks.push([st.id, st.label]); });
+    if (counts.waiting) picks.push(["waiting","Waiting"]);
+    el("homeFilter").innerHTML = picks.length > 1 ? picks.map(function(f){
+      return "<button data-homefilter=\"" + f[0] + "\" aria-pressed=\"" +
+        (S.homeFilter === f[0]) + "\">" + esc(f[1]) + "</button>";
+    }).join("") : "";
+    if (S.homeFilter !== "all"){
+      active = active.filter(function(j){
+        return S.homeFilter === "waiting" ? jobWaiting(j) : j.status === S.homeFilter;
+      });
+    }
+
+    var tally = el("tally");
+    if (!S.loaded) tally.textContent = "Loading your jobs…";
+    else if (!active.length) tally.textContent = "No active jobs yet";
+    else {
+      var txt = active.length + (active.length === 1 ? " job" : " jobs") + " · " +
+                openTotal + " open";
+      tally.innerHTML = esc(txt) +
+        (hotTotal ? " · <span class=\"hot\">" + hotTotal + " urgent</span>" : "") +
+        (waitTotal ? " · <span class=\"flagged\">" + waitTotal + " waiting</span>" : "") +
+        (quietCount ? " · <span class=\"flagged\">" + quietCount + " gone quiet</span>" : "");
+    }
+
+    var list = el("jobList");
+    if (!active.length){
+      list.innerHTML = S.loaded
+        ? "<div class=\"empty\"><strong>Nothing on the board</strong>Tap <em>+ Job</em> up top to add your first one. Each job holds its own running list of what's next.</div>"
+        : "";
+    } else {
+      list.innerHTML = active.map(function(j){
+        var ns = jobNotes(j.id);
+        var open = ns.filter(function(n){ return !n.done; });
+        open.sort(byHeat);
+        var waits = open.filter(function(n){ return n.waiting; }).length;
+        var workable = open.length - waits;
+        var hot = open.filter(function(n){ return n.urgent && !n.waiting; }).length;
+        var quiet = days(lastTouch(j)) > 7;
+        /* byHeat already sank waiting items, so open[0] is the next thing he
+           can actually do unless the whole job is waiting on somebody. */
+        var next = open.length ? headLine(open[0].text) : "Nothing open";
+        var theirs = open.filter(function(n){ return n.assignedTo && n.assignedTo !== S.myId; }).length;
+        var sd = statusDef(j.status);
+        return "<button class=\"job-row" + (sd ? " st-" + sd.id : "") +
+          "\" data-job=\"" + esc(j.id) + "\">" +
+            "<span class=\"job-head\"><span class=\"job-name\">" + esc(j.name) + "</span>" +
+            "<span class=\"count" + (workable ? "" : " zero") + "\">" + workable + "</span></span>" +
+            "<span class=\"job-sub\">" + esc(next.length > 110 ? next.slice(0,110) + "…" : next) + "</span>" +
+            "<span class=\"job-meta\">" +
+              (hot ? "<span class=\"chip chip-urgent\">" + hot + " urgent</span>" : "") +
+              (sd ? "<span class=\"chip chip-" + sd.id + "\">" + esc(sd.label) + "</span>" : "") +
+              (waits ? "<span class=\"chip chip-quiet\">" + waits + " waiting</span>" : "") +
+              (quiet ? "<span class=\"chip chip-quiet\">Quiet</span>" : "") +
+              (theirs ? "<span class=\"chip chip-who\">" + theirs + " on others</span>" : "") +
+              "<span class=\"chip chip-time\">" + esc(ago(lastTouch(j)) || "new") + "</span>" +
+            "</span>" +
+          "</button>";
+      }).join("");
+    }
+
+    el("archivedWrap").hidden = !archived.length;
+    el("archivedHead").textContent = "Archived (" + archived.length + ")";
+    el("archToggle").textContent = S.showArchived ? "Hide" : "Show";
+    el("archivedList").hidden = !S.showArchived;
+    if (S.showArchived){
+      el("archivedList").innerHTML = archived.map(function(j){
+        return "<div class=\"note\"><div class=\"note-body\"><div class=\"note-text\">" + esc(j.name) + "</div>" +
+          "<div class=\"note-meta\">" +
+          (S.canWrite ? "<button class=\"mini-btn\" data-unarchive=\"" + esc(j.id) + "\">Restore</button>" : "") +
+          (S.canWrite ? (S.pendingJobDelete === j.id
+            ? "<button class=\"mini-btn danger\" data-deljob=\"" + esc(j.id) + "\">Tap to delete for good</button>"
+            : "<button class=\"mini-btn\" data-deljob=\"" + esc(j.id) + "\">Delete</button>") : "") +
+          "</div></div></div>";
+      }).join("");
+    }
+  }
+
+  function renderJob(){
+    var job = null, i;
+    for (i = 0; i < S.jobs.length; i++) if (S.jobs[i].id === S.jobId) job = S.jobs[i];
+    if (!job) { S.view = "home"; render(); return; }
+    el("topTitle").textContent = job.name;
+    el("topTitle").className = "";
+    el("bookPanel").hidden = true;
+
+    var sbar = el("statusBar");
+    var permitsDone = permitClearedCount(job, PERMITS_ALL);
+    if (!S.canWrite){
+      var sdj = statusDef(job.status);
+      var jw = waitingCount(job);
+      sbar.hidden = !sdj && !jw && !permitsDone;
+      sbar.innerHTML = (sdj ? "<span class=\"chip chip-" + sdj.id + "\">" + esc(sdj.label) + "</span>" : "") +
+        (jw ? "<span class=\"chip chip-quiet\">" + jw + " waiting</span>" : "") +
+        (permitsDone ? "<span class=\"chip chip-time\">Permits " + permitsDone + "/" + PERMITS_ALL.length + "</span>" : "");
+    } else {
+      sbar.hidden = false;
+      var wn = waitingCount(job);
+      /* No manual Waiting button here any more: the job is waiting when an
+         item on it is waiting, so the chip is read-only and always true. */
+      sbar.innerHTML = "<span class=\"lbl\">Where it stands</span>" +
+        "<div class=\"st-row\">" +
+          STATUSES.map(function(st){
+            return "<button class=\"st-btn " + st.cls + "\" data-status=\"" + st.id + "\" aria-pressed=\"" +
+              (job.status === st.id) + "\">" + esc(st.label) + "</button>";
+          }).join("") +
+        "</div>" +
+        (wn ? "<div class=\"wait-note\">Waiting on " + wn + (wn === 1 ? " item" : " items") +
+          " — flagged at the bottom of the list.</div>" : "") +
+        permitRowHtml(job, permitsDone);
+    }
+
+    var ns = jobNotes(job.id);
+    var others = otherPerson();
+    var theirLabel = others.length === 1 ? firstName(others[0].id) + "'s" : "Others";
+
+    var filters = [["all","All"],["mine","Mine"],["theirs",theirLabel]];
+    el("jobFilter").innerHTML = filters.map(function(f){
+      return "<button data-filter=\"" + f[0] + "\" aria-pressed=\"" + (S.filter === f[0]) + "\">" + esc(f[1]) + "</button>";
+    }).join("");
+
+    var open = ns.filter(function(n){ return !n.done && matchesFilter(n); });
+    var done = ns.filter(function(n){ return n.done && matchesFilter(n); });
+    open.sort(byHeat);
+    done.sort(function(a,b){ return (b.doneAt || "").localeCompare(a.doneAt || ""); });
+
+    el("urgentToggle").hidden = !S.canWrite;
+    el("urgentToggle").setAttribute("aria-pressed", S.urgentDraft ? "true" : "false");
+
+    el("openList").innerHTML = open.length
+      ? open.map(noteHtml).join("")
+      : "<div class=\"empty\"><strong>" + (ns.length ? "Nothing here" : "Clean slate") + "</strong>" +
+        (ns.length ? "No open items under this filter." : "Type the next move for this job above and tap Add.") + "</div>";
+
+    el("doneWrap").hidden = !done.length;
+    el("doneHead").textContent = "Done (" + done.length + ")";
+    el("doneToggle").textContent = S.showDone ? "Hide" : "Show";
+    el("doneList").hidden = !S.showDone;
+    if (S.showDone) el("doneList").innerHTML = done.map(noteHtml).join("");
+
+    var foot = el("jobFoot");
+    if (!S.canWrite){
+      foot.innerHTML = "";
+    } else if (S.confirmDelete){
+      var openN = ns.filter(function(x){ return !x.done; }).length;
+      var what = ns.length === 1 ? "1 item" : ns.length + " items";
+      foot.innerHTML = "<div class=\"danger-box\">" +
+        "<div class=\"danger-msg\">Delete <strong>" + esc(job.name) + "</strong> and " + esc(what) +
+        " under it (" + openN + " still open)? This can't be undone.</div>" +
+        "<div class=\"danger-acts\">" +
+          "<button class=\"mini-btn\" data-canceldel=\"1\">Keep it</button>" +
+          "<button class=\"solid-btn small danger\" data-confirmdel=\"1\">Delete for good</button>" +
+        "</div></div>";
+    } else {
+      foot.innerHTML = nameRowHtml(job) + folderRowHtml(job) +
+        "<button class=\"text-btn\" data-archive=\"1\">" +
+          (S.confirmArchive ? "Tap again to archive" : "Archive") + "</button>" +
+        "<button class=\"text-btn danger\" data-deletejob=\"1\">Delete</button>" +
+        "<button class=\"text-btn\" data-editname=\"" + esc(job.id) + "\">Rename</button>";
+      if (S.folderEdit === job.id){
+        var inp = foot.querySelector("[data-folderinput]");
+        if (inp){ inp.value = job.folder || ""; inp.focus(); }
+      }
+      if (S.nameEdit === job.id){
+        var ninp = foot.querySelector("[data-nameinput]");
+        /* A live update from Joe re-renders this view. Only seed the box when
+           it is not already being typed in, or a snapshot mid-rename would
+           wipe what was typed. */
+        if (ninp && document.activeElement !== ninp){
+          ninp.value = job.name || "";
+          ninp.focus();
+          ninp.select();
+        }
+      }
+    }
+  }
+
+  /* The rename box, shown only while renaming. Renaming changes the label and
+     nothing else -- the job id, its items, and its folder all stay put, so
+     nothing downstream has to be re-pointed. */
+  function nameRowHtml(job){
+    if (S.nameEdit !== job.id) return "";
+    return "<div class=\"name-edit\">" +
+      "<input type=\"text\" data-nameinput=\"1\" autocomplete=\"off\" placeholder=\"Job name\">" +
+      "<button class=\"mini-btn\" data-savename=\"" + esc(job.id) + "\">Save</button>" +
+      "<button class=\"mini-btn\" data-cancelname=\"1\">Cancel</button>" +
+    "</div>";
+  }
+
+  /* Where this job lives on the F: drive. It is set here because Job Book is
+     the one place a job is created, and because the folder name and the job
+     name are usually different ("Kelly Garage & Apartment" lives in "Kelly
+     Garage-renovation"). Filing receipts reads this rather than inferring it. */
+  function folderRowHtml(job){
+    if (S.folderEdit === job.id){
+      return "<div class=\"folder-edit\">" +
+        "<input type=\"text\" data-folderinput=\"1\" spellcheck=\"false\" " +
+          "autocapitalize=\"off\" placeholder=\"F:\\Roberts and Assoc\\Jobs\\...\">" +
+        "<button class=\"mini-btn\" data-savefolder=\"" + esc(job.id) + "\">Save</button>" +
+        "<button class=\"mini-btn\" data-cancelfolder=\"1\">Cancel</button>" +
+      "</div>";
+    }
+    return "<div class=\"folder-row\">" +
+      "<span class=\"lbl\">Folder</span>" +
+      "<span class=\"folder-path" + (job.folder ? "" : " unset") + "\">" +
+        esc(job.folder || "not set — receipts for this job have nowhere to file") +
+      "</span>" +
+      "<button class=\"text-btn\" data-editfolder=\"" + esc(job.id) + "\">" +
+        (job.folder ? "Change" : "Set") + "</button>" +
+    "</div>";
+  }
+
+  function noteHtml(n){
+    if (S.editing === n.id && S.canWrite){
+      return "<div class=\"note" + (!n.done && n.urgent ? " is-urgent" : "") +
+        (!n.done && n.waiting ? " is-waiting" : "") + "\"><div class=\"note-body\">" +
+        "<textarea class=\"edit-area\" data-edit=\"" + esc(n.id) + "\"></textarea>" +
+        "<div class=\"edit-foot\">" +
+          "<button class=\"mini-btn" + (n.urgent ? " hot" : "") + "\" data-urgent=\"" + esc(n.id) +
+            "\" aria-pressed=\"" + (!!n.urgent) + "\">" + (n.urgent ? "Urgent ✕" : "Urgent") + "</button>" +
+          "<button class=\"mini-btn" + (n.waiting ? " wait" : "") + "\" data-waitnote=\"" + esc(n.id) +
+            "\" aria-pressed=\"" + (!!n.waiting) + "\">" + (n.waiting ? "Waiting ✕" : "Waiting") + "</button>" +
+          "<span class=\"spacer\"></span>" +
+          "<button class=\"mini-btn\" data-canceledit=\"1\">Cancel</button>" +
+          "<button class=\"solid-btn small\" data-saveedit=\"" + esc(n.id) + "\">Save</button>" +
+        "</div></div></div>";
+    }
+
+    var meta = [];
+    if (n.done){
+      meta.push("<span class=\"chip chip-done\">Done " + esc(n.doneBy ? "by " + firstName(n.doneBy) : "") +
+        (n.doneAt ? " · " + esc(ago(n.doneAt)) : "") + "</span>");
+    } else {
+      meta.push("<span class=\"chip chip-time\">" + esc(ago(n.createdAt) || "new") + "</span>");
+      if (S.canWrite){
+        meta.push("<button class=\"mini-btn" + (n.urgent ? " hot" : "") + "\" data-urgent=\"" + esc(n.id) +
+          "\" aria-pressed=\"" + (!!n.urgent) + "\">" + (n.urgent ? "Urgent ✕" : "Urgent") + "</button>");
+        meta.push("<button class=\"mini-btn" + (n.waiting ? " wait" : "") + "\" data-waitnote=\"" + esc(n.id) +
+          "\" aria-pressed=\"" + (!!n.waiting) + "\">" + (n.waiting ? "Waiting ✕" : "Waiting") + "</button>");
+      } else {
+        if (n.urgent) meta.push("<span class=\"chip chip-urgent\">Urgent</span>");
+        if (n.waiting) meta.push("<span class=\"chip chip-quiet\">Waiting</span>");
+      }
+    }
+    if (n.scheduledAt){
+      meta.push("<span class=\"chip chip-who\">📅 " + esc(schedLabel(n)) + "</span>");
+    }
+    if (S.canWrite){
+      meta.push("<button class=\"mini-btn" + (n.assignedTo ? " assigned" : "") + "\" data-assign=\"" + esc(n.id) + "\">" +
+        esc(n.assignedTo ? firstName(n.assignedTo) : "Assign") + "</button>");
+      if (!n.done && S.mcp) meta.push("<button class=\"mini-btn\" data-cal=\"" + esc(n.id) + "\">📅 " +
+        (n.scheduledAt ? "Change" : "Calendar") + "</button>");
+      meta.push(S.pendingDelete === n.id
+        ? "<button class=\"mini-btn danger\" data-delete=\"" + esc(n.id) + "\">Tap to delete</button>"
+        : "<button class=\"mini-btn\" data-delete=\"" + esc(n.id) + "\">Remove</button>");
+    } else if (n.assignedTo){
+      meta.push("<span class=\"chip chip-who\">" + esc(firstName(n.assignedTo)) + "</span>");
+    }
+
+    var assignRow = "";
+    if (S.assignOpen === n.id && S.canWrite){
+      var opts = [["", "Nobody"]];
+      if (S.myId) opts.push([S.myId, "Me"]);
+      otherPerson().forEach(function(p){ opts.push([p.id, firstName(p.id)]); });
+      assignRow = "<div class=\"assign-row\">" + opts.map(function(o){
+        return "<button class=\"mini-btn" + ((n.assignedTo || "") === o[0] ? " assigned" : "") +
+          "\" data-setassign=\"" + esc(n.id) + "\" data-who=\"" + esc(o[0]) + "\">" + esc(o[1]) + "</button>";
+      }).join("") + "</div>";
+    }
+
+    var calRow = "";
+    if (S.calOpen === n.id && S.canWrite){
+      var st = S.calStatus && S.calStatus.id === n.id ? S.calStatus : null;
+      var allDay = S.calDur === "allday";
+      var startVal = S.calDate || tomorrowStr();
+      calRow = "<div class=\"cal-row\">" +
+        "<input type=\"date\" data-caldate=\"1\" value=\"" + esc(startVal) + "\" aria-label=\"" +
+          (allDay ? "First day" : "Date") + "\">" +
+        (allDay
+          ? "<span class=\"to\">to</span><input type=\"date\" data-calend=\"1\" value=\"" +
+            esc(S.calEnd || startVal) + "\" min=\"" + esc(startVal) + "\" aria-label=\"Last day\">"
+          : "<input type=\"time\" data-caltime=\"1\" value=\"" + esc(S.calTime || "08:00") + "\" aria-label=\"Time\">") +
+        "<select data-caldur=\"1\" aria-label=\"How long\">" +
+          DURATIONS.map(function(d){
+            return "<option value=\"" + d[0] + "\"" + (S.calDur === d[0] ? " selected" : "") +
+              ">" + esc(d[1]) + "</option>";
+          }).join("") +
+        "</select>" +
+        "<button class=\"solid-btn small\" data-calsend=\"" + esc(n.id) + "\"" + (S.calBusy ? " disabled" : "") + ">" +
+          (S.calBusy ? "Sending…" : "Send") + "</button>" +
+        "<button class=\"mini-btn\" data-calclose=\"1\">Close</button>" +
+        (st ? "<span class=\"cal-status " + esc(st.kind) + "\">" + esc(st.msg) + "</span>" : "") +
+      "</div>";
+    }
+
+    return "<div class=\"note" + (n.done ? " is-done" : "") + (!n.done && n.urgent ? " is-urgent" : "") +
+      (!n.done && n.waiting ? " is-waiting" : "") + "\">" +
+      "<button class=\"tick\" data-toggle=\"" + esc(n.id) + "\" aria-label=\"" +
+        (n.done ? "Mark not done" : "Mark done") + "\"" + (S.canWrite ? "" : " disabled") + ">✓</button>" +
+      "<div class=\"note-body\">" +
+      (S.canWrite
+        ? "<div class=\"note-open\" data-editopen=\"" + esc(n.id) + "\" role=\"button\" tabindex=\"0\">" + bodyHtml(n.text) + "</div>"
+        : bodyHtml(n.text)) +
+      "<div class=\"note-meta\">" + meta.join("") + "</div>" + assignRow + calRow + "</div></div>";
+  }
+
+  /* ---------- writes ---------- */
+
+  function guard(p){
+    return p.catch(function(e){
+      var code = e && e.code;
+      if (code === "invalid_argument" || code === "not_granted" || code === "revoked"){
+        lockWrites();
+        setBanner("This view can't save changes. Ask for Contributor access on this page to add or check off items.");
+        render();
+      } else {
+        setBanner("That didn't save. Check your signal and try again.");
+      }
+    });
+  }
+
+  function addJob(name){
+    if (!S.db || !name.trim()) return;
+    var id = newId();
+    guard(S.db.collection("jobs").doc(id).set({
+      name: name.trim(), archived: false, createdAt: nowIso(),
+      bookId: S.bookId || defaultBookId(), status: "", waiting: false, permits: {}
+    }));
+  }
+  function addBook(name){
+    if (!S.db || !name.trim()) return;
+    var id = newId();
+    S.bookId = id;
+    rememberBook(id);
+    guard(S.db.collection("books").doc(id).set({ name: name.trim(), createdAt: nowIso() }));
+  }
+  function addNote(text, urgent){
+    if (!S.db || !text.trim() || !S.jobId) return;
+    var id = newId();
+    guard(S.db.collection("notes").doc(id).set({
+      jobId: S.jobId, text: text.trim(), done: false, urgent: !!urgent, waiting: false,
+      createdAt: nowIso(), assignedTo: "", doneBy: "", doneAt: ""
+    }));
+  }
+  function deleteJob(jobId){
+    if (!S.db || !jobId) return;
+    var ns = jobNotes(jobId), i;
+    for (i = 0; i < ns.length; i++){
+      S.db.collection("notes").doc(ns[i].id).delete().catch(function(){});
+    }
+    guard(S.db.collection("jobs").doc(jobId).delete());
+  }
+  function toggleNote(n){
+    if (!S.db) return;
+    guard(S.db.collection("notes").doc(n.id).update(
+      n.done ? { done:false, doneBy:"", doneAt:"" }
+             : { done:true, doneBy:S.myId || "", doneAt:nowIso() }
+    ));
+  }
+
+  function calErrorMsg(err){
+    var code = err && err.code;
+    if (code === "server_not_connected")
+      return "Google Calendar isn't connected for you. Add it in claude.ai Settings → Connectors.";
+    if (code === "needs_reauth")
+      return "Google Calendar needs reconnecting in claude.ai Settings → Connectors.";
+    if (code === "selection_required")
+      return "You have more than one Google Calendar connected. Choose one when Claude asks, then tap Send again.";
+    if (code === "not_in_manifest")
+      return "Calendar access is turned off for this page.";
+    if (code === "blocked_by_policy" || code === "approval_required")
+      return "Calendar writes from this page are blocked by policy.";
+    if (code === "cancelled" || code === "consent_required")
+      return "Calendar access wasn't allowed. Tap Send again to be asked.";
+    if (code === "tool_error")
+      return "Google Calendar refused it: " + ((err && err.message) || "no reason given");
+    if (code === "server_unavailable" || code === "upstream_error")
+      return "Couldn't reach the calendar. Check it before resending — it may have gone through.";
+    return "That didn't send. Tap Send to try again.";
+  }
+
+  function sendToCalendar(n){
+    var job = null, i;
+    for (i = 0; i < S.jobs.length; i++) if (S.jobs[i].id === n.jobId) job = S.jobs[i];
+
+    var allDay = S.calDur === "allday";
+    var dayOne = S.calDate || tomorrowStr();
+    var startIso, endIso, lastDay = "", payload;
+
+    if (allDay){
+      // Google reads an all-day event's end as the morning AFTER, so the last
+      // day the viewer picked is sent as the day following it.
+      lastDay = S.calEnd || dayOne;
+      if (lastDay < dayOne) lastDay = dayOne;
+      var s0 = localDate(dayOne, "00:00");
+      var e0 = localDate(addDays(lastDay, 1), "00:00");
+      if (!s0 || !e0){
+        S.calStatus = { id:n.id, kind:"bad", msg:"Pick a first and last day." };
+        render(); return;
+      }
+      startIso = isoWithOffset(s0);
+      endIso = isoWithOffset(e0);
+    } else {
+      var start = localDate(dayOne, S.calTime || "08:00");
+      if (!start){
+        S.calStatus = { id:n.id, kind:"bad", msg:"Pick a date and a time first." };
+        render(); return;
+      }
+      var mins = parseInt(S.calDur, 10);
+      if (!mins || mins < 1) mins = 60;
+      startIso = isoWithOffset(start);
+      endIso = isoWithOffset(new Date(start.getTime() + mins * 60000));
+    }
+
+    if (!S.mcp){
+      S.calStatus = { id:n.id, kind:"bad", msg:"Calendar isn't available in this view." };
+      render(); return;
+    }
+
+    var bl = bulletsOf(n.text);
+    var desc = (job ? job.name : "") + (bl.length ? "\n\n" + bl.map(function(b){ return BULLET + " " + b; }).join("\n") : "");
+
+    S.calBusy = true;
+    S.calStatus = { id:n.id, kind:"", msg:"Sending…" };
+    render();
+
+    payload = {
+      summary: headLine(n.text) || "Job Book item",
+      startTime: startIso,
+      endTime: endIso,
+      description: desc
+    };
+    if (allDay) payload.allDay = true;
+
+    S.mcp.callTool("Google Calendar", "create_event", payload).then(function(){
+      S.calBusy = false;
+      S.calStatus = { id:n.id, kind:"good", msg: allDay
+        ? (lastDay === dayOne ? "On your calendar, all day." : "On your calendar, " + dayLabel(startIso) + "–" + dayLabel(localDate(lastDay, "00:00")) + ".")
+        : "On your calendar." };
+      if (S.db) S.db.collection("notes").doc(n.id).update({
+        scheduledAt: startIso,
+        allDay: allDay,
+        scheduledEnd: allDay ? isoWithOffset(localDate(lastDay, "00:00")) : ""
+      }).catch(function(){});
+      render();
+      setTimeout(function(){
+        if (S.calOpen === n.id && S.calStatus && S.calStatus.kind === "good"){
+          S.calOpen = null; S.calStatus = null; render();
+        }
+      }, 1800);
+    }).catch(function(err){
+      S.calBusy = false;
+      S.calStatus = { id:n.id, kind:"bad", msg: calErrorMsg(err) };
+      render();
+    });
+  }
+
+  /* ---------- events ---------- */
+
+  el("topTitle").addEventListener("click", function(){
+    if (S.view !== "home" || !S.books.length) return;
+    S.bookPanel = !S.bookPanel;
+    render();
+  });
+  el("bookList").addEventListener("click", function(e){
+    var b = e.target.closest("[data-book]");
+    if (!b) return;
+    S.bookId = b.getAttribute("data-book");
+    rememberBook(S.bookId);
+    S.bookPanel = false;
+    S.showArchived = false;
+    render();
+  });
+  el("newBookSave").addEventListener("click", function(){
+    var v = el("newBookName").value;
+    if (!v.trim()) return;
+    addBook(v);
+    el("newBookName").value = "";
+    S.bookPanel = false;
+    render();
+  });
+  el("newBookName").addEventListener("keydown", function(e){
+    if (e.key === "Enter") el("newBookSave").click();
+  });
+
+  el("addJobBtn").addEventListener("click", function(){
+    var f = el("newJobForm");
+    f.hidden = !f.hidden;
+    if (!f.hidden) el("newJobName").focus();
+  });
+  el("newJobSave").addEventListener("click", function(){
+    var v = el("newJobName").value;
+    if (!v.trim()) return;
+    addJob(v);
+    el("newJobName").value = "";
+    el("newJobForm").hidden = true;
+  });
+  el("newJobName").addEventListener("keydown", function(e){
+    if (e.key === "Enter") el("newJobSave").click();
+  });
+
+  el("backBtn").addEventListener("click", function(){
+    S.view = "home"; S.jobId = null; S.assignOpen = null;
+    S.pendingDelete = null; S.confirmArchive = false; S.confirmDelete = false; S.showDone = false;
+    render();
+  });
+
+  el("jobList").addEventListener("click", function(e){
+    var b = e.target.closest("[data-job]");
+    if (!b) return;
+    S.jobId = b.getAttribute("data-job");
+    S.view = "job"; S.filter = "all"; S.showDone = false;
+    S.assignOpen = null; S.pendingDelete = null; S.confirmArchive = false; S.confirmDelete = false;
+    S.urgentDraft = false;
+    el("noteInput").value = "";
+    el("noteSave").disabled = true;
+    autosize();
+    window.scrollTo(0, 0);
+    render();
+  });
+
+  el("archToggle").addEventListener("click", function(){ S.showArchived = !S.showArchived; render(); });
+  el("doneToggle").addEventListener("click", function(){ S.showDone = !S.showDone; render(); });
+
+  el("archivedList").addEventListener("click", function(e){
+    var b = e.target.closest("[data-unarchive]");
+    if (b && S.db){
+      S.pendingJobDelete = null;
+      guard(S.db.collection("jobs").doc(b.getAttribute("data-unarchive")).update({ archived:false }));
+      return;
+    }
+    b = e.target.closest("[data-deljob]");
+    if (b){
+      var id = b.getAttribute("data-deljob");
+      if (S.pendingJobDelete === id){ S.pendingJobDelete = null; deleteJob(id); }
+      else { S.pendingJobDelete = id; }
+      render();
+    }
+  });
+
+  el("homeFilter").addEventListener("click", function(e){
+    var b = e.target.closest("[data-homefilter]");
+    if (!b) return;
+    S.homeFilter = b.getAttribute("data-homefilter");
+    render();
+  });
+
+  el("statusBar").addEventListener("click", function(e){
+    if (!S.db || !S.jobId || !S.canWrite) return;
+    var job = null, i;
+    for (i = 0; i < S.jobs.length; i++) if (S.jobs[i].id === S.jobId) job = S.jobs[i];
+    if (!job) return;
+    var b = e.target.closest("[data-status]");
+    if (b){
+      var want = b.getAttribute("data-status");
+      guard(S.db.collection("jobs").doc(job.id).update({ status: job.status === want ? "" : want }));
+      return;
+    }
+    if (e.target.closest("[data-trades]")){
+      S.tradesOpen = !S.tradesOpen;
+      render();
+      return;
+    }
+    var pb = e.target.closest("[data-permit]");
+    if (pb){
+      var pid = pb.getAttribute("data-permit");
+      var next = {}, k;
+      for (k in (job.permits || {})) if (Object.prototype.hasOwnProperty.call(job.permits, k)) next[k] = job.permits[k];
+      next[pid] = nextPermitState(permitState(job, pid));
+
+      var patch = { permits: next };
+      /* Auto-flip, deliberately narrow: only off a tap, only when the five
+         pre-start items are all settled, and only on a job already under
+         contract. Trades and final never trigger it -- they happen after the
+         job is running. */
+      var after = { permits: next };
+      if (job.status === "contracted" && beforeStartClear(after)) patch.status = "active";
+      guard(S.db.collection("jobs").doc(job.id).update(patch));
+    }
+  });
+
+  el("jobFilter").addEventListener("click", function(e){
+    var b = e.target.closest("[data-filter]");
+    if (!b) return;
+    S.filter = b.getAttribute("data-filter");
+    S.assignOpen = null; S.pendingDelete = null;
+    render();
+  });
+
+  var noteInput = el("noteInput");
+
+  function autosize(){
+    noteInput.style.height = "auto";
+    /* One line at rest -- it grows from the first wrap or bullet. */
+    noteInput.style.height = Math.max(28, noteInput.scrollHeight) + "px";
+  }
+  function syncSave(){
+    el("noteSave").disabled = !cleanDraft(noteInput.value).trim();
+    autosize();
+  }
+  function setCaret(pos){
+    try { noteInput.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+  }
+
+  noteInput.addEventListener("input", syncSave);
+
+  // Enter drops to a new bullet; Enter on an empty bullet clears it. Shift+Enter is a plain line break.
+  function bulletKey(e, ta){
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return false;
+    e.preventDefault();
+    var val = ta.value;
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var lineStart = val.lastIndexOf("\n", start - 1) + 1;
+    var current = val.slice(lineStart, start);
+    var caret;
+
+    if (/^•\s*$/.test(current)){
+      ta.value = val.slice(0, lineStart) + val.slice(end);
+      caret = lineStart;
+    } else {
+      var insert = "\n" + BULLET + " ";
+      ta.value = val.slice(0, start) + insert + val.slice(end);
+      caret = start + insert.length;
+    }
+    try { ta.setSelectionRange(caret, caret); } catch (err) { /* ignore */ }
+    return true;
+  }
+
+  noteInput.addEventListener("keydown", function(e){
+    if (bulletKey(e, noteInput)) syncSave();
+  });
+
+  // The edit box is rebuilt on every render, so its events are delegated.
+  document.addEventListener("keydown", function(e){
+    var ta = e.target;
+    if (!ta || ta.tagName !== "TEXTAREA" || !ta.hasAttribute("data-edit")) return;
+    if (bulletKey(e, ta)){
+      S.editDraft = ta.value;
+      S.editCaret = ta.selectionStart;
+      autosizeEl(ta);
+    }
+  });
+  document.addEventListener("input", function(e){
+    var ta = e.target;
+    if (!ta || ta.tagName !== "TEXTAREA" || !ta.hasAttribute("data-edit")) return;
+    S.editDraft = ta.value;
+    S.editCaret = ta.selectionStart;
+    autosizeEl(ta);
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target && e.target.closest && e.target.closest("a[href]")) return;
+    var t = e.target && e.target.closest ? e.target.closest("[data-editopen]") : null;
+    if (!t) return;
+    e.preventDefault();
+    t.click();
+  });
+
+  el("urgentToggle").addEventListener("click", function(){
+    S.urgentDraft = !S.urgentDraft;
+    el("urgentToggle").setAttribute("aria-pressed", S.urgentDraft ? "true" : "false");
+  });
+
+  el("noteSave").addEventListener("click", function(){
+    var draft = cleanDraft(noteInput.value);
+    if (!draft.trim()) return;
+    addNote(draft, S.urgentDraft);
+    noteInput.value = "";
+    S.urgentDraft = false;
+    el("urgentToggle").setAttribute("aria-pressed", "false");
+    el("noteSave").disabled = true;
+    autosize();
+    noteInput.focus();
+  });
+
+  function noteListClick(e){
+    var t, n, i, id;
+    // A tap on a phone/email link dials or mails — it must not open the editor.
+    if (e.target.closest("a[href]")) return;
+    function find(nid){ for (i = 0; i < S.notes.length; i++) if (S.notes[i].id === nid) return S.notes[i]; return null; }
+
+    t = e.target.closest("[data-toggle]");
+    if (t){ n = find(t.getAttribute("data-toggle")); if (n) toggleNote(n); return; }
+
+    t = e.target.closest("[data-urgent]");
+    if (t && S.db){
+      n = find(t.getAttribute("data-urgent"));
+      if (n) guard(S.db.collection("notes").doc(n.id).update({ urgent: !n.urgent }));
+      return;
+    }
+
+    t = e.target.closest("[data-waitnote]");
+    if (t && S.db){
+      n = find(t.getAttribute("data-waitnote"));
+      if (n) guard(S.db.collection("notes").doc(n.id).update({ waiting: !n.waiting }));
+      return;
+    }
+
+    t = e.target.closest("[data-assign]");
+    if (t){ id = t.getAttribute("data-assign"); S.assignOpen = S.assignOpen === id ? null : id; render(); return; }
+
+    t = e.target.closest("[data-setassign]");
+    if (t && S.db){
+      id = t.getAttribute("data-setassign");
+      guard(S.db.collection("notes").doc(id).update({ assignedTo: t.getAttribute("data-who") }));
+      S.assignOpen = null; render(); return;
+    }
+
+    t = e.target.closest("[data-delete]");
+    if (t){
+      id = t.getAttribute("data-delete");
+      if (S.pendingDelete === id){
+        S.pendingDelete = null;
+        if (S.db) guard(S.db.collection("notes").doc(id).delete());
+      } else {
+        S.pendingDelete = id;
+      }
+      render(); return;
+    }
+
+    t = e.target.closest("[data-saveedit]");
+    if (t){
+      id = t.getAttribute("data-saveedit");
+      var draft = cleanDraft(S.editDraft);
+      S.editing = null; S.editDraft = ""; S.editCaret = null;
+      if (draft.trim() && S.db) guard(S.db.collection("notes").doc(id).update({ text: draft }));
+      render(); return;
+    }
+    if (e.target.closest("[data-canceledit]")){
+      S.editing = null; S.editDraft = ""; S.editCaret = null;
+      render(); return;
+    }
+    t = e.target.closest("[data-editopen]");
+    if (t && S.canWrite){
+      id = t.getAttribute("data-editopen");
+      n = find(id);
+      if (!n) return;
+      S.editing = id; S.editDraft = n.text; S.editCaret = n.text.length;
+      S.calOpen = null; S.assignOpen = null; S.pendingDelete = null;
+      render(); return;
+    }
+
+    t = e.target.closest("[data-cal]");
+    if (t){
+      id = t.getAttribute("data-cal");
+      if (S.calOpen === id){ S.calOpen = null; }
+      else {
+        n = find(id);
+        S.calOpen = id;
+        S.calStatus = null;
+        S.calDate = tomorrowStr();
+        S.calTime = "08:00";
+        S.calDur = "60";
+        S.calEnd = "";
+        if (n && n.scheduledAt){
+          var prev = new Date(n.scheduledAt);
+          if (!isNaN(prev.getTime())){
+            S.calDate = dateStr(prev);
+            S.calTime = pad(prev.getHours()) + ":" + pad(prev.getMinutes());
+          }
+          if (n.allDay){
+            S.calDur = "allday";
+            var pend = n.scheduledEnd ? new Date(n.scheduledEnd) : null;
+            S.calEnd = (pend && !isNaN(pend.getTime())) ? dateStr(pend) : S.calDate;
+          }
+        }
+      }
+      S.assignOpen = null; S.editing = null;
+      render(); return;
+    }
+    if (e.target.closest("[data-calclose]")){
+      S.calOpen = null; S.calStatus = null; render(); return;
+    }
+    t = e.target.closest("[data-calsend]");
+    if (t && !S.calBusy){
+      n = find(t.getAttribute("data-calsend"));
+      if (n) sendToCalendar(n);
+      return;
+    }
+  }
+
+  function calInputChange(e){
+    var t = e.target;
+    if (!t || !t.hasAttribute) return;
+    if (t.hasAttribute("data-caldate")){
+      S.calDate = t.value;
+      if (S.calEnd && S.calEnd < S.calDate) S.calEnd = S.calDate;
+      if (S.calDur === "allday") render();
+    }
+    else if (t.hasAttribute("data-caltime")) S.calTime = t.value;
+    else if (t.hasAttribute("data-calend")) S.calEnd = t.value;
+    else if (t.hasAttribute("data-caldur")){
+      var was = S.calDur;
+      S.calDur = t.value;
+      if (S.calDur === "allday" && !S.calEnd) S.calEnd = S.calDate || tomorrowStr();
+      // the row swaps a field in or out, so redraw it
+      if ((was === "allday") !== (S.calDur === "allday")) render();
+    }
+  }
+  document.addEventListener("change", calInputChange);
+  document.addEventListener("input", calInputChange);
+  el("openList").addEventListener("click", noteListClick);
+  el("doneList").addEventListener("click", noteListClick);
+
+  /* Phone / email links. */
+
+  function copyText(s){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(s).catch(function(){ copyFallback(s); });
+    } else copyFallback(s);
+  }
+  function copyFallback(s){
+    var ta = document.createElement("textarea");
+    ta.value = s;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e){ /* nothing left to try */ }
+    document.body.removeChild(ta);
+  }
+  function hideToast(){
+    var old = document.getElementById("linkToast");
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+  }
+  // Only appears when the handoff silently failed — if Mail or the dialer took
+  // over, this page is no longer the visible one and nothing is shown.
+  // Shown only when the tap didn't hand off. `alt` is a second route the viewer
+  // can take by tapping an anchor directly, which carries its own permission to
+  // leave the page where a scripted jump may not.
+  function linkToast(raw, alt){
+    hideToast();
+    var box = document.createElement("div");
+    box.id = "linkToast";
+    box.className = "linktoast";
+
+    var v = document.createElement("span");
+    v.className = "v";
+    v.textContent = raw;
+    box.appendChild(v);
+
+    if (alt && alt.href){
+      var go = document.createElement("a");
+      go.className = "mini-btn";
+      go.href = alt.href;
+      go.target = "_blank";
+      go.rel = "noopener";
+      go.textContent = alt.label || "Open";
+      box.appendChild(go);
+    }
+
+    var copy = document.createElement("button");
+    copy.className = "mini-btn";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", function(){
+      copyText(raw);
+      copy.textContent = "Copied";
+      setTimeout(hideToast, 900);
+    });
+    box.appendChild(copy);
+
+    var shut = document.createElement("button");
+    shut.className = "mini-btn";
+    shut.textContent = "Close";
+    shut.addEventListener("click", hideToast);
+    box.appendChild(shut);
+
+    document.body.appendChild(box);
+    setTimeout(function(){
+      if (document.getElementById("linkToast") === box) hideToast();
+    }, 10000);
+  }
+
+  document.addEventListener("click", function(e){
+    var a = e.target && e.target.closest ? e.target.closest("a.lnk") : null;
+    if (!a) return;
+    hideToast();
+    var raw = a.getAttribute("data-raw") || a.textContent;
+
+    // The mail is written here and left in Gmail drafts, which works where
+    // handing off to the mail app does not. With no Gmail to write to, the
+    // address goes on the clipboard instead.
+    e.preventDefault();
+    if (S.mcp){ openMail(raw); return; }
+    copyText(raw);
+    copiedToast(raw);
+  });
+
+  /* ---------- email a contact ---------- */
+
+  var mailAddr = "";
+
+  function mailStatus(msg, kind){
+    var p = el("mailStatus");
+    p.textContent = msg || "";
+    p.className = "cal-status" + (kind ? " " + kind : "");
+  }
+  var sendArmed = false;   // Send asks twice: a sent email can't be pulled back.
+
+  // Grow the subject box to however many lines the subject needs, so a long one
+  // is readable at a glance rather than scrolled off the right edge.
+  function fitSubject(){
+    var ta = el("mailSubject");
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+  }
+
+  function mailBusy(on, label){
+    el("mailSend").disabled = on;
+    el("mailDraft").disabled = on;
+    el("mailWrite").disabled = on;
+    el("mailSend").textContent = label || (sendArmed ? "Tap again to send" : "Send");
+    el("mailSend").className = "solid-btn small" + (!on && sendArmed ? " arm" : "");
+  }
+  function disarmSend(){
+    if (!sendArmed) return;
+    sendArmed = false;
+    mailBusy(false);
+  }
+  function openMail(addr){
+    mailAddr = addr;
+    el("mailTo").innerHTML = "To <strong>" + esc(addr) + "</strong>";
+    el("mailSubject").value = "";
+    el("mailBody").value = "";
+    el("mailAsk").value = "";
+    mailStatus("");
+    sendArmed = false;
+    mailBusy(false);
+
+    // Default the subject to the job being looked at — most mail from here is
+    // about the job in front of him.
+    if (S.view === "job"){
+      for (var i = 0; i < S.jobs.length; i++){
+        if (S.jobs[i].id === S.jobId) el("mailSubject").value = S.jobs[i].name;
+      }
+    }
+    el("askFab").hidden = true;
+    el("mailSheet").hidden = false;
+    fitSubject();          // only measurable once the sheet is on screen
+    el("mailBody").focus();
+  }
+  function closeMail(){
+    el("mailSheet").hidden = true;
+    el("askFab").hidden = !S.sample || S.askOpen;
+    mailAddr = "";
+  }
+
+  function jobContext(){
+    if (S.view !== "job") return "";
+    var job = null, i;
+    for (i = 0; i < S.jobs.length; i++) if (S.jobs[i].id === S.jobId) job = S.jobs[i];
+    if (!job) return "";
+    var open = jobNotes(job.id).filter(function(n){ return !n.done; }).slice(0, 8);
+    return "The job is \"" + job.name + "\". What's open on it right now:\n" +
+      (open.length ? open.map(function(n){ return "- " + headLine(n.text); }).join("\n") : "- nothing open");
+  }
+
+  // Claude may answer with the JSON fenced, prefaced or trailing off. Take what
+  // can be read rather than throwing the whole answer away.
+  // A line break typed straight into a JSON string is invalid, and an email body
+  // is full of them. Escape the ones inside quotes so the answer still parses.
+  function mendJson(src){
+    var out = "", inStr = false, esc = false, i, c;
+    for (i = 0; i < src.length; i++){
+      c = src.charAt(i);
+      if (esc){ out += c; esc = false; continue; }
+      if (c === "\\"){ out += c; esc = true; continue; }
+      if (c === "\""){ inStr = !inStr; out += c; continue; }
+      if (inStr && (c === "\n" || c === "\r")){ if (c === "\n") out += "\\n"; continue; }
+      if (inStr && c === "\t"){ out += "\\t"; continue; }
+      out += c;
+    }
+    return out;
+  }
+  function readDraft(text){
+    var s = String(text == null ? "" : text).trim();
+    var a = s.indexOf("{"), b = s.lastIndexOf("}"), o = null;
+    if (a !== -1 && b > a){
+      var slice = s.slice(a, b + 1);
+      try { o = JSON.parse(slice); }
+      catch (e){
+        try { o = JSON.parse(mendJson(slice)); } catch (e2){ o = null; }
+      }
+      if (o && (o.subject || o.body)) return { subject:o.subject || "", body:o.body || "" };
+    }
+    if (!s) return null;
+    // No JSON in it — treat a leading "Subject: ..." line as the subject and
+    // the rest as the message.
+    var m = /^subject\s*:\s*(.+)$/im.exec(s);
+    if (m) return { subject:m[1].trim(), body:s.slice(m.index + m[0].length).trim() };
+    return { subject:"", body:s };
+  }
+
+  function writeMail(){
+    var rough = el("mailAsk").value.trim();
+    if (!rough){ mailStatus("Say what the email should cover first.", "bad"); return; }
+    if (!S.sample){ mailStatus("Claude isn't available on this page.", "bad"); return; }
+    sendArmed = false;
+    el("mailWrite").disabled = true;
+    el("mailSend").disabled = true;
+    el("mailDraft").disabled = true;
+    el("mailWrite").textContent = "Writing…";
+    mailStatus("Writing it…");
+
+    var prompt =
+      "Write a short work email for Stephen Roberts of Roberts & Associates, a construction company. " +
+      "He dictated roughly what he wants to say; it may be rough speech with typos — read through them. " +
+      "Keep it professional, plain and brief: a few sentences, no filler, no marketing tone. " +
+      "Sign off as Stephen. Do not invent prices, dates or commitments he did not give you.\n\n" +
+      (jobContext() ? jobContext() + "\n\n" : "") +
+      "Sending to: " + mailAddr + "\n" +
+      "What he wants to say: " + rough + "\n\n" +
+      "Answer as JSON: {\"subject\": \"...\", \"body\": \"...\"} and nothing else.";
+
+    S.sample(prompt, {
+      modelTier: "default",
+      onText: function(u){ if (u && u.text) mailStatus("Writing it…"); }
+    }).then(function(r){
+      el("mailWrite").textContent = "Write it";
+      mailBusy(false);
+      var out = readDraft(r && r.text);
+      if (!out){
+        mailStatus("Nothing came back. Try saying it a bit differently.", "bad");
+        return;
+      }
+      if (out.subject){ el("mailSubject").value = out.subject; fitSubject(); }
+      if (out.body) el("mailBody").value = out.body;
+      mailStatus("Written — read it over, change anything, then send.", "good");
+    }).catch(function(e){
+      el("mailWrite").textContent = "Write it";
+      mailBusy(false);
+      // Keep a partial answer rather than losing the work.
+      if (e && e.text){
+        var part = readDraft(e.text);
+        if (part && part.body){
+          el("mailBody").value = part.body;
+          if (part.subject){ el("mailSubject").value = part.subject; fitSubject(); }
+          mailStatus("Only part of it came through — finish it yourself.", "bad");
+          return;
+        }
+      }
+      mailStatus(askCopy(e && e.code) + (e && e.code ? " (" + e.code + ")" : ""), "bad");
+    });
+  }
+
+  function mailErrorMsg(err, sending){
+    var code = err && err.code;
+    if (code === "server_unavailable" || code === "upstream_error")
+      return sending
+        ? "Couldn't reach Gmail. Check your Sent folder before trying again — it may have gone out."
+        : "Couldn't reach Gmail. Check your drafts before trying again — it may have gone through.";
+    if (code === "server_not_connected")
+      return "Gmail isn't connected for you. Add it in claude.ai Settings → Connectors.";
+    if (code === "needs_reauth")
+      return "Gmail needs reconnecting in claude.ai Settings → Connectors.";
+    if (code === "selection_required")
+      return "You have more than one Gmail connected. Choose one when Claude asks, then tap Save draft again.";
+    if (code === "not_in_manifest")
+      return "Gmail access is turned off for this page.";
+    if (code === "blocked_by_policy" || code === "approval_required")
+      return "Gmail writes from this page are blocked by policy.";
+    if (code === "cancelled" || code === "consent_required")
+      return "Gmail access wasn't allowed. Tap again to be asked.";
+    if (code === "tool_error")
+      return "Gmail refused it: " + ((err && err.message) || "no reason given");
+    return sending ? "That didn't send. Tap Send to try again." : "That didn't save. Tap Save draft to try again.";
+  }
+
+  // sending = true goes out now; otherwise it lands in Gmail drafts.
+  function mailOut(sending){
+    // Pasted text can carry line breaks; a subject line can't.
+    var subject = el("mailSubject").value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+    var body = el("mailBody").value.trim();
+    if (!body){ mailStatus("Write the message first.", "bad"); return; }
+    if (!S.mcp){ mailStatus("Gmail isn't available in this view.", "bad"); return; }
+
+    mailBusy(true, sending ? "Sending…" : "Saving…");
+    mailStatus(sending ? "Sending it…" : "Saving to your Gmail drafts…");
+
+    S.mcp.callTool("Gmail", sending ? "send_message" : "create_draft", {
+      to: [mailAddr],
+      subject: subject || "(no subject)",
+      body: body
+    }).then(function(){
+      sendArmed = false;
+      mailBusy(false, sending ? "Sent" : "Saved");
+      mailStatus(sending
+        ? "Sent to " + mailAddr + "."
+        : "It's in your Gmail drafts — open Gmail and send it.", "good");
+      setTimeout(function(){
+        if (!el("mailSheet").hidden) closeMail();
+      }, 2600);
+    }).catch(function(err){
+      sendArmed = false;
+      mailBusy(false);
+      mailStatus(mailErrorMsg(err, sending), "bad");
+    });
+  }
+
+  el("mailClose").addEventListener("click", closeMail);
+  el("mailDraft").addEventListener("click", function(){
+    sendArmed = false;
+    mailOut(false);
+  });
+  el("mailSend").addEventListener("click", function(){
+    // First tap arms, second sends — no undo once it's gone.
+    if (!sendArmed){
+      sendArmed = true;
+      mailBusy(false);
+      mailStatus("Tap Send again to send it for real — there's no undo.", "bad");
+      return;
+    }
+    mailOut(true);
+  });
+  // Editing after arming cancels the armed state, so an edited message is never
+  // sent on a tap meant for the version before it.
+  el("mailBody").addEventListener("input", disarmSend);
+  el("mailSubject").addEventListener("input", function(){
+    fitSubject();
+    disarmSend();
+  });
+  // A subject is one line of text — Enter moves on rather than breaking it.
+  el("mailSubject").addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); el("mailBody").focus(); }
+  });
+  el("mailWrite").addEventListener("click", writeMail);
+  el("mailAsk").addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault(); writeMail(); }
+  });
+
+  // Confirmation that the address is on the clipboard.
+  function copiedToast(raw){
+    hideToast();
+    var box = document.createElement("div");
+    box.id = "linkToast";
+    box.className = "linktoast";
+    var v = document.createElement("span");
+    v.className = "v";
+    v.textContent = "Copied — " + raw;
+    box.appendChild(v);
+    var shut = document.createElement("button");
+    shut.className = "mini-btn";
+    shut.textContent = "Close";
+    shut.addEventListener("click", hideToast);
+    box.appendChild(shut);
+    document.body.appendChild(box);
+    setTimeout(function(){
+      if (document.getElementById("linkToast") === box) hideToast();
+    }, 3000);
+  }
+
+  function saveJobName(jobId){
+    var box = el("jobFoot").querySelector("[data-nameinput]");
+    var name = box ? box.value.trim() : "";
+    /* An empty box is a cancel, not a rename -- a job with no name is
+       unfindable on the home list. */
+    if (name && S.db) guard(S.db.collection("jobs").doc(jobId).update({ name: name }));
+    S.nameEdit = null;
+    render();
+  }
+
+  /* Return on the phone keyboard saves the rename; Escape backs out. */
+  el("jobFoot").addEventListener("keydown", function(e){
+    if (!e.target.closest("[data-nameinput]")) return;
+    if (e.key === "Enter"){ e.preventDefault(); if (S.nameEdit) saveJobName(S.nameEdit); }
+    else if (e.key === "Escape"){ S.nameEdit = null; render(); }
+  });
+
+  el("jobFoot").addEventListener("click", function(e){
+    var ne = e.target.closest("[data-editname]");
+    if (ne){
+      S.nameEdit = ne.getAttribute("data-editname");
+      S.folderEdit = null;
+      S.confirmArchive = false; S.confirmDelete = false;
+      render(); return;
+    }
+    if (e.target.closest("[data-cancelname]")){
+      S.nameEdit = null; render(); return;
+    }
+    var ns2 = e.target.closest("[data-savename]");
+    if (ns2){ saveJobName(ns2.getAttribute("data-savename")); return; }
+    var fe = e.target.closest("[data-editfolder]");
+    if (fe){
+      S.folderEdit = fe.getAttribute("data-editfolder");
+      S.nameEdit = null;
+      S.confirmArchive = false; S.confirmDelete = false;
+      render(); return;
+    }
+    if (e.target.closest("[data-cancelfolder]")){
+      S.folderEdit = null; render(); return;
+    }
+    var fs = e.target.closest("[data-savefolder]");
+    if (fs){
+      var box = el("jobFoot").querySelector("[data-folderinput]");
+      /* Trailing slashes and stray quotes come along when a path is pasted
+         out of Explorer's address bar; strip them so the stored value is
+         exactly what a file tool can use. */
+      var path = box ? box.value.trim().replace(/^["']|["']$/g, "").replace(/[\\\/]+$/, "") : "";
+      if (S.db) guard(S.db.collection("jobs").doc(fs.getAttribute("data-savefolder"))
+                       .update({ folder: path }));
+      S.folderEdit = null;
+      render(); return;
+    }
+    if (e.target.closest("[data-archive]")){
+      if (!S.confirmArchive){ S.confirmArchive = true; S.confirmDelete = false; render(); return; }
+      S.confirmArchive = false;
+      if (S.db) guard(S.db.collection("jobs").doc(S.jobId).update({ archived:true }));
+      S.view = "home"; S.jobId = null;
+      render(); return;
+    }
+    if (e.target.closest("[data-deletejob]")){
+      S.confirmDelete = true; S.confirmArchive = false; render(); return;
+    }
+    if (e.target.closest("[data-canceldel]")){
+      S.confirmDelete = false; render(); return;
+    }
+    if (e.target.closest("[data-confirmdel]")){
+      S.confirmDelete = false;
+      deleteJob(S.jobId);
+      S.view = "home"; S.jobId = null;
+      render(); return;
+    }
+  });
+
+  /* ---------- ask claude ---------- */
+
+  function askSnapshot(){
+    var lines = [], book = bookName();
+    lines.push("Current book: " + book);
+    var active = booksJobs(S.bookId);
+    active.sort(function(x,y){ return (x.createdAt || "").localeCompare(y.createdAt || ""); });
+    if (!active.length) lines.push("(no jobs in this book yet)");
+    active.forEach(function(j){
+      var open = jobNotes(j.id).filter(function(n){ return !n.done; });
+      open.sort(byHeat);
+      lines.push("");
+      lines.push("JOB: " + j.name + (j.status ? " [" + j.status + "]" : "") +
+        (waitingCount(j) ? " [waiting on " + waitingCount(j) + "]" : ""));
+      var pdone = [], pna = [], popen = [];
+      PERMITS_ALL.forEach(function(p){
+        var st = permitState(j, p.id);
+        if (st === "done") pdone.push(p.label);
+        else if (st === "na") pna.push(p.label);
+        else popen.push(p.label);
+      });
+      if (pdone.length || pna.length){
+        lines.push("  PERMITS: done " + (pdone.join(", ") || "none") +
+          "; n/a " + (pna.join(", ") || "none") +
+          "; still open " + (popen.join(", ") || "none"));
+      }
+      if (!open.length) lines.push("  (nothing open)");
+      open.slice(0, 12).forEach(function(n){
+        lines.push("  - " + (n.waiting ? "[WAITING] " : (n.urgent ? "[URGENT] " : "")) + headLine(n.text));
+      });
+    });
+    var others = S.books.filter(function(x){ return x.id !== S.bookId; }).map(function(x){ return x.name; });
+    if (others.length) lines.push("\nOther books (not shown, say the name to switch): " + others.join(", "));
+    return lines.join("\n");
+  }
+
+  var ASK_RULES =
+    "You are helping Stephen run a construction job book from inside the app itself. " +
+    "He is often in a truck and talking, so his message may be rough dictation \u2014 read through typos and odd spellings.\n\n" +
+    "Use the tools to change the book. Match a job he names to the closest job in the list below, even if he says it loosely " +
+    "or misspells it; if two could match, ask which rather than guessing. If he names a job that does not exist, say so and " +
+    "offer to create it \u2014 do not create a job unless he asks.\n\n" +
+    "When he describes something to do, add it as a note on the right job. Keep the note's first line short and " +
+    "actionable; put any detail he gives in bullets. Confirm in one short sentence what you did, naming the job. " +
+    "If he says something is urgent, hot, needed today or holding up the job, set it urgent — otherwise leave it normal. " +
+    "If the item is on somebody else and he can't move it himself — 'waiting on Brian to drop the tree', 'once the " +
+    "inspector signs off' — set it waiting instead of urgent, and when he says he got it, clear the waiting flag. " +
+    "Items already marked show as [URGENT] or [WAITING] below.\n\n" +
+    "Answer questions about what is open straight from the list below, briefly. Do not invent jobs, notes or dates.\n\n" +
+    "Here is the book as it stands right now:\n\n";
+
+  function findJobByName(name){
+    var want = String(name == null ? "" : name).trim().toLowerCase();
+    if (!want) return null;
+    var pool = booksJobs(S.bookId), hits = [], i, nm;
+    for (i = 0; i < pool.length; i++){
+      nm = pool[i].name.toLowerCase();
+      if (nm === want) return pool[i];
+    }
+    for (i = 0; i < pool.length; i++){
+      nm = pool[i].name.toLowerCase();
+      if (nm.indexOf(want) !== -1 || want.indexOf(nm) !== -1) hits.push(pool[i]);
+    }
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1){
+      throw new Error("More than one job matches \"" + name + "\": " +
+        hits.map(function(h){ return h.name; }).join(", ") + ". Ask which one.");
+    }
+    throw new Error("No job called \"" + name + "\" in " + bookName() + ". Jobs here: " +
+      (pool.map(function(h){ return h.name; }).join(", ") || "none yet"));
+  }
+
+  var askTools = [
+    {
+      name: "add_note",
+      description: "Add an item to a job in the current book. Returns the job it landed on. " +
+        "Use 'detail' for extra lines that belong under the task as bullets.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Name of the job, as it appears in the book." },
+          text: { type: "string", description: "The task, one short actionable line." },
+          detail: { type: "array", items: { type: "string" }, description: "Optional bullet lines of detail." },
+          urgent: { type: "boolean", description: "True only if he says it's urgent, hot, on fire, today, ASAP or holding up the job." },
+          waiting: { type: "boolean", description: "True if the item is on somebody else and he can't do it himself yet — 'waiting on', 'until the owner', 'once the inspector', 'as soon as they'." }
+        },
+        required: ["job", "text"]
+      },
+      execute: function(input){
+        var job = findJobByName(input.job);
+        var body = String(input.text || "").trim();
+        if (!body) throw new Error("No task text given.");
+        var det = Array.isArray(input.detail) ? input.detail : [];
+        det.forEach(function(d){
+          if (String(d).trim()) body += "\n" + BULLET + " " + String(d).trim();
+        });
+        var id = newId();
+        return S.db.collection("notes").doc(id).set({
+          jobId: job.id, text: body, done: false, urgent: !!input.urgent,
+          waiting: !!input.waiting, createdAt: nowIso(),
+          assignedTo: "", doneBy: "", doneAt: "", scheduledAt: ""
+        }).then(function(){
+          S.askToolRan = true;
+          return "Added to " + job.name +
+            (input.waiting ? " (waiting)" : (input.urgent ? " (urgent)" : ""));
+        });
+      }
+    },
+    {
+      name: "flag_urgent",
+      description: "Mark an open item urgent, or clear the urgent flag off one. Urgent items sort to the top of the job " +
+        "and show in red. Give the job and enough of the item's wording to identify it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Name of the job." },
+          text: { type: "string", description: "Words from the item to flag." },
+          urgent: { type: "boolean", description: "True to mark urgent, false to clear it. Defaults to true." }
+        },
+        required: ["job", "text"]
+      },
+      execute: function(input){
+        var job = findJobByName(input.job);
+        var want = String(input.text || "").trim().toLowerCase();
+        if (!want) throw new Error("No item text given.");
+        var on = input.urgent === false ? false : true;
+        var open = jobNotes(job.id).filter(function(n){ return !n.done; });
+        var hits = open.filter(function(n){ return n.text.toLowerCase().indexOf(want) !== -1; });
+        if (!hits.length) throw new Error("Nothing open on " + job.name + " matching \"" + input.text + "\".");
+        if (hits.length > 1) throw new Error("Several items match: " +
+          hits.map(function(h){ return headLine(h.text); }).join(" / ") + ". Ask which one.");
+        return S.db.collection("notes").doc(hits[0].id).update({ urgent: on })
+          .then(function(){
+            S.askToolRan = true;
+            return (on ? "Flagged urgent: " : "Urgent cleared: ") + headLine(hits[0].text);
+          });
+      }
+    },
+    {
+      name: "flag_waiting",
+      description: "Mark an open item as waiting on somebody else, or clear that flag. Waiting items sink to the " +
+        "bottom of the job, show in amber, and stop counting as open work. Give the job and enough of the item's " +
+        "wording to identify it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Name of the job." },
+          text: { type: "string", description: "Words from the item to flag." },
+          waiting: { type: "boolean", description: "True to mark waiting, false to clear it (he got what he was waiting on). Defaults to true." }
+        },
+        required: ["job", "text"]
+      },
+      execute: function(input){
+        var job = findJobByName(input.job);
+        var want = String(input.text || "").trim().toLowerCase();
+        if (!want) throw new Error("No item text given.");
+        var on = input.waiting === false ? false : true;
+        var open = jobNotes(job.id).filter(function(n){ return !n.done; });
+        var hits = open.filter(function(n){ return n.text.toLowerCase().indexOf(want) !== -1; });
+        if (!hits.length) throw new Error("Nothing open on " + job.name + " matching \"" + input.text + "\".");
+        if (hits.length > 1) throw new Error("Several items match: " +
+          hits.map(function(h){ return headLine(h.text); }).join(" / ") + ". Ask which one.");
+        return S.db.collection("notes").doc(hits[0].id).update({ waiting: on })
+          .then(function(){
+            S.askToolRan = true;
+            return (on ? "Flagged waiting: " : "Waiting cleared: ") + headLine(hits[0].text);
+          });
+      }
+    },
+    {
+      name: "complete_note",
+      description: "Mark an open item done. Give the job and enough of the item's wording to identify it. " +
+        "Returns what was checked off.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Name of the job." },
+          text: { type: "string", description: "Words from the item to check off." }
+        },
+        required: ["job", "text"]
+      },
+      execute: function(input){
+        var job = findJobByName(input.job);
+        var want = String(input.text || "").trim().toLowerCase();
+        if (!want) throw new Error("No item text given.");
+        var open = jobNotes(job.id).filter(function(n){ return !n.done; });
+        var hits = open.filter(function(n){ return n.text.toLowerCase().indexOf(want) !== -1; });
+        if (!hits.length) throw new Error("Nothing open on " + job.name + " matching \"" + input.text + "\".");
+        if (hits.length > 1) throw new Error("Several items match: " +
+          hits.map(function(h){ return headLine(h.text); }).join(" / ") + ". Ask which one.");
+        return S.db.collection("notes").doc(hits[0].id).update({
+          done: true, doneBy: S.myId || "", doneAt: nowIso()
+        }).then(function(){
+          S.askToolRan = true;
+          return "Checked off: " + headLine(hits[0].text);
+        });
+      }
+    },
+    {
+      name: "add_job",
+      description: "Create a new job in the current book. Only when Stephen asks for a new job. Returns its name.",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string", description: "Name of the new job." } },
+        required: ["name"]
+      },
+      execute: function(input){
+        var nm = String(input.name || "").trim();
+        if (!nm) throw new Error("No job name given.");
+        var id = newId();
+        return S.db.collection("jobs").doc(id).set({
+          name: nm, archived: false, createdAt: nowIso(),
+          bookId: S.bookId || defaultBookId(), status: "", waiting: false, permits: {}
+        }).then(function(){
+          S.askToolRan = true;
+          return "Created job " + nm;
+        });
+      }
+    }
+  ];
+
+  function askCopy(code){
+    if (code === "not_granted" || code === "sampling_disabled")
+      return "Claude isn't allowed for this page on your account.";
+    if (code === "tools_unavailable")
+      return "This view can't let Claude write into the book. Try opening the page in your browser.";
+    if (code === "rate_limited")
+      return "That's too many requests for now. Give it a minute.";
+    if (code === "session_expired")
+      return "You've been signed out of Claude. Sign in and try again.";
+    if (code === "refused")
+      return "Claude wouldn't answer that one. Try saying it differently.";
+    if (code === "empty_completion")
+      return "No answer came back. Try saying it a bit differently.";
+    if (code === "prompt_too_large")
+      return "That's too much at once. Say it shorter.";
+    return "That didn't go through. Try again.";
+  }
+
+  function renderAsk(){
+    var log = el("askLog");
+    var html = S.askTurns.map(function(t){
+      return "<div class=\"bubble " + (t.role === "user" ? "me" : "them") + "\">" + esc(t.content) + "</div>";
+    }).join("");
+    if (S.askLive) html += "<div class=\"bubble them\">" + esc(S.askLive) + "</div>";
+    else if (S.askBusy) html += "<div class=\"bubble them\">Thinking\u2026</div>";
+    if (S.askErr) html += "<div class=\"bubble err\">" + esc(S.askErr) + "</div>";
+    if (S.askNote) html += "<div class=\"bubble note\">" + esc(S.askNote) + "</div>";
+    log.innerHTML = html;
+    log.scrollTop = log.scrollHeight;
+    el("askStop").hidden = !S.askBusy;
+    el("askSend").disabled = S.askBusy;
+  }
+
+  // Wipe the panel back to its resting state: hint only, empty box, no
+  // leftovers from the last visit. Bumping askSession makes any reply still
+  // in flight land on the floor instead of repainting a cleared panel.
+  function askReset(){
+    if (S.askFade){ clearTimeout(S.askFade); S.askFade = null; }
+    S.askSession++;
+    S.askTurns = [];
+    S.askErr = null;
+    S.askNote = null;
+    S.askLive = "";
+    S.askBusy = false;
+    var box = el("askInput");
+    if (box){ box.value = ""; box.style.height = "auto"; }
+  }
+
+  // A transient line that clears itself -- used for the "sent" confirmation
+  // and for nudges, so neither one outlives the moment it belongs to.
+  function askFlash(ms){
+    if (S.askFade) clearTimeout(S.askFade);
+    var sid = S.askSession;
+    S.askFade = setTimeout(function(){
+      if (sid !== S.askSession) return;
+      S.askFade = null;
+      S.askTurns = [];
+      S.askErr = null;
+      S.askNote = null;
+      renderAsk();
+    }, ms);
+  }
+
+  function askSend(){
+    var box = el("askInput");
+    var msg = box.value.trim();
+    if (S.askBusy || !S.sample) return;
+    if (!msg){
+      S.askNote = "Nothing to send yet — say what you need first.";
+      renderAsk();
+      askFlash(2500);
+      return;
+    }
+    if (S.askFade){ clearTimeout(S.askFade); S.askFade = null; }
+    box.value = "";
+    box.style.height = "auto";
+    S.askTurns.push({ role:"user", content: msg });
+    S.askErr = null;
+    S.askNote = null;
+    S.askLive = "";
+    S.askBusy = true;
+    S.askToolRan = false;
+    var sid = S.askSession;
+    renderAsk();
+
+    S.askCtl = new AbortController();
+    var turns = [{ role:"user", content: ASK_RULES + askSnapshot() }].concat(
+      S.askTurns.slice(-8)
+    );
+
+    S.sample(turns, {
+      tools: askTools,
+      modelTier: "quick",
+      signal: S.askCtl.signal,
+      onText: function(u){
+        if (sid !== S.askSession) return;
+        S.askLive = u.text; renderAsk();
+      }
+    }).then(function(r){
+      // Closed or reset while this was in flight: the write still landed in the
+      // book, but this panel has moved on, so don't repaint it.
+      if (sid !== S.askSession) return;
+      S.askBusy = false;
+      S.askLive = "";
+      var reply = String((r && r.text) || "");
+      S.askTurns.push({ role:"assistant", content: reply });
+      renderAsk();
+      // A finished action is just a receipt -- let it go. An answer, or a
+      // question back to him, is the thing he came for, so it stays put until
+      // he closes.
+      var asksBack = /\?\s*$/.test(reply.trim());
+      if (S.askToolRan && !asksBack) askFlash(4000);
+    }).catch(function(e){
+      if (sid !== S.askSession) return;
+      S.askBusy = false;
+      S.askLive = "";
+      if (e && e.text) S.askTurns.push({ role:"assistant", content: e.text });
+      if (!e || e.code !== "cancelled") S.askErr = askCopy(e && e.code);
+      renderAsk();
+    });
+  }
+
+  el("askFab").addEventListener("click", function(){
+    S.askOpen = true;
+    askReset();
+    el("askSheet").hidden = false;
+    el("askFab").hidden = true;
+    renderAsk();
+    el("askInput").focus();
+  });
+  el("askClose").addEventListener("click", function(){
+    S.askOpen = false;
+    // Reset on the way out as well as the way in: anything still running
+    // finishes against the book, it just has no panel to come back to.
+    askReset();
+    renderAsk();
+    el("askSheet").hidden = true;
+    el("askFab").hidden = !S.sample;
+  });
+  el("askStop").addEventListener("click", function(){
+    if (S.askCtl) S.askCtl.abort();
+  });
+  el("askSend").addEventListener("click", askSend);
+  el("askInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); askSend(); }
+  });
+  el("askInput").addEventListener("input", function(){
+    var t = el("askInput");
+    t.style.height = "auto";
+    t.style.height = Math.min(120, Math.max(46, t.scrollHeight)) + "px";
+  });
+
+  /* ---------- boot ---------- */
+
+  render();
+
+  (async function(){
+    var db = null, user = null;
+    try { db = await window.claude.use("db"); } catch (e) { db = null; }
+    try { user = await window.claude.use("user"); } catch (e) { user = null; }
+    try { S.mcp = await window.claude.use("mcp"); } catch (e) { S.mcp = null; }
+    try { S.sample = await window.claude.use("sample"); } catch (e) { S.sample = null; }
+    if (S.sample && !S.askOpen) el("askFab").hidden = false;
+
+    if (!db){
+      S.loaded = true;
+      setBanner("Can't reach your job book right now. Check your signal, then close and reopen the app.");
+      lockWrites();
+      render();
+      return;
+    }
+    S.db = db; S.user = user;
+
+    if (user){
+      try { S.myId = await user.id(); } catch (e) { S.myId = null; }
+      try {
+        var can = await user.can("data.write");
+        if (can === false) lockWrites();
+      } catch (e) { /* keep inputs */ }
+    }
+
+    // Register this viewer in the roster, only when it's missing or the name changed.
+    if (user && S.myId && S.canWrite){
+      try {
+        var mine = await user.me();
+        var myName = (mine && mine.name) || "";
+        var ref = db.collection("people").doc(S.myId);
+        var snap = await ref.get();
+        if (!snap.exists || (snap.data() || {}).name !== myName){
+          await ref.set({ name: myName });
+        }
+      } catch (e) { /* roster is a nicety */ }
+    }
+
+    function onErr(e){
+      if (e && e.code === "revoked"){ lockWrites(); render(); }
+    }
+
+    db.collection("jobs").onSnapshot(function(snap){
+      S.jobs = snap.docs.map(function(d){
+        var v = d.data() || {};
+        /* Every field the app needs must be named here. A field left out is
+           dropped on the way in, which is how the urgent flag went missing:
+           it saved fine and was thrown away on load. `folder` is the job's
+           folder on the F: drive -- Job Book owns it, and filing receipts
+           reads it from here rather than from a hardcoded list that drifts
+           every time a job folder is named differently from the job. */
+        return { id:d.id, name:v.name || "Untitled job", archived:!!v.archived,
+                 createdAt:v.createdAt || "", bookId:v.bookId || "",
+                 status:v.status || "", waiting:!!v.waiting,
+                 permits:(v.permits && typeof v.permits === "object") ? v.permits : {},
+                 folder:v.folder || "" };
+      });
+      S.loaded = true;
+      render();
+    }, onErr);
+
+    db.collection("books").onSnapshot(function(snap){
+      S.books = snap.docs.map(function(d){
+        var v = d.data() || {};
+        return { id:d.id, name:v.name || "Untitled book", createdAt:v.createdAt || "" };
+      });
+      S.books.sort(function(a,b){ return (a.createdAt || "").localeCompare(b.createdAt || ""); });
+      var known = S.books.some(function(b){ return b.id === S.bookId; });
+      if (!known){
+        var saved = recallBook();
+        S.bookId = (saved && S.books.some(function(b){ return b.id === saved; })) ? saved : defaultBookId();
+      }
+      render();
+    }, onErr);
+
+    db.collection("notes").onSnapshot(function(snap){
+      S.notes = snap.docs.map(function(d){
+        var v = d.data() || {};
+        return { id:d.id, jobId:v.jobId || "", text:v.text || "", done:!!v.done,
+                 urgent:!!v.urgent, waiting:!!v.waiting,
+                 createdAt:v.createdAt || "", assignedTo:v.assignedTo || "",
+                 doneBy:v.doneBy || "", doneAt:v.doneAt || "",
+                 scheduledAt:v.scheduledAt || "", scheduledEnd:v.scheduledEnd || "",
+                 allDay:!!v.allDay };
+      });
+      render();
+    }, onErr);
+
+    db.collection("people").onSnapshot(async function(snap){
+      S.people = snap.docs.map(function(d){
+        var v = d.data() || {};
+        return { id:d.id, name:v.name || "" };
+      });
+      if (user){
+        try {
+          var ids = S.people.map(function(p){ return p.id; });
+          if (ids.length) S.profiles = await user.profiles(ids) || {};
+        } catch (e) { /* names stay as stored */ }
+      }
+      render();
+    }, onErr);
+  })();
+})();
+</script>
+
+</body></html>
