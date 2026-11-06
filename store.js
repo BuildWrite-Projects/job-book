@@ -32,7 +32,8 @@
     books: 'jobbook_books',
     jobs: 'jobbook_jobs',
     notes: 'jobbook_notes',
-    people: 'jobbook_people'
+    people: 'jobbook_people',
+    labor: 'jobbook_labor'
   };
 
   var client = null;

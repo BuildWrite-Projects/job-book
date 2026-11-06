@@ -596,6 +596,43 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .solid-btn.danger{background:var(--danger);border-color:var(--danger);color:var(--paper)}
+
+  /* ---------- Labor Log ---------- */
+  .job-tools{display:flex;gap:8px;margin-bottom:12px}
+  .job-tools .ghost-btn{flex:1;text-align:left;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .job-tools .lhint{font-family:inherit;font-size:.85rem;font-weight:400;color:var(--ink-faint);text-transform:none;letter-spacing:0}
+  .ask-sheet.labor-sheet{max-height:90vh}
+  .labor-sheet .ask-head h2{font-size:1.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ltot{font-size:.9rem;color:var(--ink-soft);line-height:1.45}
+  .ltot strong{color:var(--ink);font-weight:700}
+  .lsec{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:.72rem;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+  .lsec .rule{flex:1;height:1px;background:var(--line)}
+  .lsec .text-btn{padding:0;font-size:.75rem;text-transform:none;letter-spacing:0;font-weight:400}
+  .lrow{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:var(--card)}
+  .lrow.tap{cursor:pointer}
+  .lrow.sent{opacity:.7;border-style:dashed}
+  .lrow.new{border-color:var(--accent);background:var(--accent-wash)}
+  .lmain{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:.95rem}
+  .ldate{font-weight:700;min-width:62px}
+  .lwho{color:var(--accent);font-weight:600}
+  .ltime{color:var(--ink-soft);font-size:.85rem}
+  .lhrs{margin-left:auto;font-weight:700;white-space:nowrap}
+  .lnote{font-size:.88rem;color:var(--ink-soft);margin-top:2px;overflow-wrap:anywhere}
+  .lacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .lform{border:1px solid var(--accent);border-radius:10px;padding:10px;display:grid;
+    grid-template-columns:1fr 1fr;gap:8px}
+  .lform label{display:flex;flex-direction:column;gap:3px;font-size:.7rem;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--ink-faint)}
+  .lform label.wide{grid-column:1 / -1}
+  .lform input, .lform select{width:100%;min-width:0;background:transparent;border:1px solid var(--line);
+    border-radius:8px;padding:8px 9px;font-size:1rem;color:var(--ink);font-family:inherit}
+  .lform .lacts{grid-column:1 / -1}
+  .lsend{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--line-soft)}
+  .lsend .solid-btn{width:100%}
+  .lline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.88rem;color:var(--ink-soft)}
+  .lline input{flex:1;min-width:160px;background:transparent;border:1px solid var(--line);border-radius:8px;
+    padding:8px 9px;font-size:1rem;color:var(--ink)}
 </style>
 
 <header class="topbar">
@@ -632,6 +669,9 @@
   </section>
 
   <section id="jobView" hidden>
+    <div class="job-tools">
+      <button id="laborBtn" class="ghost-btn"><span>Labor Log</span><span id="laborBtnHint" class="lhint"></span></button>
+    </div>
     <div id="statusBar" class="statusbar"></div>
     <div class="composer">
       <textarea id="noteInput" placeholder="What's next on this job?"></textarea>
@@ -668,6 +708,18 @@
   </div>
 </div>
 
+<div id="laborSheet" class="ask-sheet labor-sheet" hidden>
+  <div class="ask-head">
+    <h2 id="laborTitle">Labor Log</h2>
+    <button id="laborClose" class="mini-btn">Close</button>
+  </div>
+  <div id="laborBody" class="mail-body"></div>
+  <div class="ask-foot" id="laborFoot">
+    <textarea id="laborInput" rows="1" placeholder="Say it: me and Joe, today 7 to 3:30, framed the porch, half hour lunch"></textarea>
+    <button id="laborAdd" class="solid-btn small">Add</button>
+  </div>
+</div>
+
 <div id="mailSheet" class="ask-sheet" hidden>
   <div class="ask-head">
     <h2>New email</h2>
@@ -696,7 +748,7 @@
 
   var S = {
     view:"home", jobId:null,
-    jobs:[], notes:[], people:[], books:[], bookId:null, bookPanel:false,
+    jobs:[], notes:[], people:[], books:[], labor:[], bookId:null, bookPanel:false,
     folderEdit:null, nameEdit:null,
     myId:null, profiles:{},
     db:null, user:null, mcp:null, calServer:null,
@@ -1071,6 +1123,7 @@
     el("backBtn").hidden = S.view !== "job";
     el("addJobBtn").hidden = S.view !== "home" || !S.canWrite;
     if (S.view === "home") renderHome(); else renderJob();
+    renderLabor();
     restoreEditor();
   }
 
@@ -2755,6 +2808,466 @@
     t.style.height = Math.min(120, Math.max(46, t.scrollHeight)) + "px";
   });
 
+  /* ---------- Labor Log ----------
+     One row per person per work day on a job (table jobbook_labor). Rows are
+     emailed in batches: "Email new entries" sends only rows that have never
+     been sent, then stamps them with the send (sentAt + sendId), so the next
+     send picks up where this one left off and nothing goes twice. A batch can
+     be unmarked if the email never actually went. filedAt is set later when
+     the hours are filed into the job's Cost Estimate workbook. */
+
+  var L = { open:false, busy:false, preview:null, edit:null, showSent:false,
+            crewEdit:false, emailEdit:false, msg:"", msgKind:"", armUnsend:null, ctl:null };
+
+  function curJob(){
+    for (var i = 0; i < S.jobs.length; i++) if (S.jobs[i].id === S.jobId) return S.jobs[i];
+    return null;
+  }
+  function jobBookRec(job){
+    var id = job ? bookOf(job) : "", i;
+    for (i = 0; i < S.books.length; i++) if (S.books[i].id === id) return S.books[i];
+    return null;
+  }
+  function laborOf(jobId){
+    return S.labor.filter(function(r){ return r.jobId === jobId; }).sort(function(a, b){
+      return (a.date + a.who + a.createdAt).localeCompare(b.date + b.who + b.createdAt);
+    });
+  }
+  function toMin(t){
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    return (h > 23 || mi > 59) ? null : h * 60 + mi;
+  }
+  function hrsOf(r){
+    var a = toMin(r.start), b = toMin(r.end);
+    if (a != null && b != null && b > a){
+      var h = (b - a - (Number(r.breakMin) || 0)) / 60;
+      return Math.max(0, Math.round(h * 4) / 4);
+    }
+    return Math.max(0, Number(r.hours) || 0);
+  }
+  function fmtHrs(h){ var r = Math.round((Number(h) || 0) * 100) / 100; return r % 1 === 0 ? r.toFixed(1) : String(r); }
+  function fmtTime(t){
+    var m = toMin(t); if (m == null) return "";
+    var h = Math.floor(m / 60), mi = m % 60, ap = h < 12 ? "a" : "p";
+    h = h % 12 || 12;
+    return h + ":" + pad(mi) + ap;
+  }
+  var WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function ymdDate(s){
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function fmtDay(s){
+    var d = ymdDate(s);
+    return d ? WD[d.getDay()] + " " + (d.getMonth() + 1) + "/" + d.getDate() : (s || "No date");
+  }
+  function shortMD(s){ var d = ymdDate(s); return d ? (d.getMonth() + 1) + "/" + d.getDate() : ""; }
+  function todayYmd(){ var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function timeSpan(r){
+    var s = fmtTime(r.start), e = fmtTime(r.end);
+    if (!s || !e) return "";
+    return s + "–" + e + (r.breakMin ? " (" + r.breakMin + " min break)" : "");
+  }
+  function sumBy(rows){
+    var tot = 0, per = {}, order = [];
+    rows.forEach(function(r){
+      var h = hrsOf(r), w = r.who || "?";
+      tot += h;
+      if (!(w in per)){ per[w] = 0; order.push(w); }
+      per[w] += h;
+    });
+    return { tot:tot, per:per, order:order };
+  }
+  function sumText(sm){
+    var parts = sm.order.map(function(w){ return w + " " + fmtHrs(sm.per[w]); });
+    return fmtHrs(sm.tot) + " hrs" + (sm.order.length > 1 ? " (" + parts.join(", ") + ")" : "");
+  }
+  function myFirst(){
+    var p = S.profiles[S.myId], n = (p && p.name) || "", i;
+    if (!n) for (i = 0; i < S.people.length; i++) if (S.people[i].id === S.myId) n = S.people[i].name || "";
+    return (n || "").split(" ")[0];
+  }
+  function crewOf(job){
+    var b = jobBookRec(job);
+    if (b && b.laborCrew.length) return b.laborCrew.slice();
+    var out = [];
+    S.people.forEach(function(p){
+      var f = (p.name || "").split(" ")[0];
+      if (f && out.indexOf(f) === -1) out.push(f);
+    });
+    return out.length ? out : ["Me"];
+  }
+  function meOnCrew(crew){
+    var f = myFirst().toLowerCase(), i;
+    for (i = 0; i < crew.length; i++){
+      var c = crew[i].toLowerCase();
+      if (c === f || (f && c.slice(0, 3) === f.slice(0, 3))) return crew[i];
+    }
+    return crew[0] || "Me";
+  }
+  function emailOk(s){ return /^[^\s@,;]+@[^\s@,;]+\.[A-Za-z]{2,}$/.test(String(s || "").trim()); }
+
+  function laborMsg(msg, kind){ L.msg = msg || ""; L.msgKind = kind || ""; }
+
+  function laborRowHtml(r, opts){
+    opts = opts || {};
+    var cls = "lrow" + (r.sentAt ? " sent" : "") + (opts.isNew ? " new" : "") + (opts.tap ? " tap" : "");
+    var span = timeSpan(r);
+    return "<div class=\"" + cls + "\"" + (opts.tap ? " data-ledit=\"" + esc(opts.tap) + "\"" : "") + ">" +
+      "<div class=\"lmain\"><span class=\"ldate\">" + esc(fmtDay(r.date)) + "</span>" +
+        "<span class=\"lwho\">" + esc(r.who || "?") + "</span>" +
+        (span ? "<span class=\"ltime\">" + esc(span) + "</span>" : "") +
+        "<span class=\"lhrs\">" + fmtHrs(hrsOf(r)) + " h</span></div>" +
+      (r.note ? "<div class=\"lnote\">" + esc(r.note) + "</div>" : "") +
+      (opts.extra || "") +
+    "</div>";
+  }
+
+  function laborFormHtml(r, key, crew){
+    var names = crew.slice();
+    if (r.who && names.indexOf(r.who) === -1) names.push(r.who);
+    var timed = toMin(r.start) != null && toMin(r.end) != null;
+    return "<div class=\"lform\" data-lform=\"" + esc(key) + "\">" +
+      "<label>Date<input type=\"date\" data-f=\"date\" value=\"" + esc(r.date || todayYmd()) + "\"></label>" +
+      "<label>Who<select data-f=\"who\">" + names.map(function(n){
+        return "<option" + (n === r.who ? " selected" : "") + ">" + esc(n) + "</option>";
+      }).join("") + "</select></label>" +
+      "<label>Start<input type=\"time\" data-f=\"start\" value=\"" + esc(r.start || "") + "\"></label>" +
+      "<label>End<input type=\"time\" data-f=\"end\" value=\"" + esc(r.end || "") + "\"></label>" +
+      "<label>Break (min)<input type=\"number\" inputmode=\"numeric\" min=\"0\" step=\"5\" data-f=\"breakMin\" value=\"" + esc(r.breakMin || 0) + "\"></label>" +
+      "<label>Hours" + (timed ? " (from times)" : "") + "<input type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"0.25\" data-f=\"hours\" value=\"" + esc(fmtHrs(hrsOf(r))) + "\"" + (timed ? " readonly" : "") + "></label>" +
+      "<label class=\"wide\">Note<input type=\"text\" data-f=\"note\" maxlength=\"120\" value=\"" + esc(r.note || "") + "\"></label>" +
+      "<div class=\"lacts\">" +
+        "<button class=\"solid-btn small\" data-lsave=\"" + esc(key) + "\">Save</button>" +
+        "<button class=\"mini-btn\" data-lcancel=\"1\">Cancel</button>" +
+        "<span class=\"spacer\" style=\"flex:1\"></span>" +
+        (key !== "new" ? "<button class=\"mini-btn danger\" data-ldel=\"" + esc(key) + "\">Delete</button>" : "") +
+      "</div>" +
+    "</div>";
+  }
+
+  function readForm(form){
+    var g = function(f){ var x = form.querySelector("[data-f=\"" + f + "\"]"); return x ? x.value : ""; };
+    var r = { date:g("date"), who:g("who").trim(), start:g("start"), end:g("end"),
+              breakMin:Math.max(0, parseInt(g("breakMin"), 10) || 0),
+              hours:Math.max(0, parseFloat(g("hours")) || 0), note:g("note").trim() };
+    if (toMin(r.start) == null || toMin(r.end) == null){ r.start = ""; r.end = ""; }
+    r.hours = hrsOf(r);
+    return r;
+  }
+
+  function renderLabor(force){
+    if (!L) return;          // render() can run before this section has loaded
+    var job = curJob();
+    var hint = el("laborBtnHint");
+    if (job && hint){
+      var all = laborOf(job.id), unsent = all.filter(function(r){ return !r.sentAt; });
+      hint.textContent = all.length
+        ? fmtHrs(sumBy(all).tot) + " hrs" + (unsent.length ? " · " + unsent.length + " not sent" : "")
+        : "tap to log hours";
+    }
+    var sheet = el("laborSheet");
+    if (!L.open || S.view !== "job" || !job){
+      if (!sheet.hidden){ sheet.hidden = true; el("askFab").hidden = !S.sample || S.askOpen; }
+      if (S.view !== "job") L.open = false;
+      return;
+    }
+    sheet.hidden = false;
+    el("askFab").hidden = true;
+    el("laborTitle").textContent = "Labor Log · " + job.name;
+    el("laborFoot").hidden = !S.canWrite || !!L.preview || !!L.edit;
+    el("laborAdd").disabled = L.busy;
+    el("laborAdd").textContent = L.busy ? "Reading…" : "Add";
+
+    /* A live update from the other phone redraws everything. Don't wipe a
+       form that is being filled in. */
+    var body = el("laborBody");
+    if (!force && body.querySelector(".lform") && body.contains(document.activeElement)) return;
+
+    var crew = crewOf(job), book = jobBookRec(job);
+    var rows = laborOf(job.id);
+    var unsent = rows.filter(function(r){ return !r.sentAt; });
+    var sent = rows.filter(function(r){ return r.sentAt; });
+    var h = "";
+
+    if (L.msg) h += "<p class=\"cal-status " + esc(L.msgKind) + "\">" + esc(L.msg) + "</p>";
+
+    // What Claude made of what was said: checked before anything is saved.
+    if (L.preview){
+      h += "<div class=\"lsec\">Check these, then save<span class=\"rule\"></span></div>";
+      L.preview.forEach(function(r, i){
+        h += (L.edit === "p" + i) ? laborFormHtml(r, "p" + i, crew)
+          : laborRowHtml(r, { isNew:true, tap:"p" + i });
+      });
+      if (!L.edit) h += "<div class=\"lacts\"><button class=\"solid-btn small\" data-lkeep=\"1\">Save " +
+        (L.preview.length === 1 ? "it" : "all " + L.preview.length) + "</button>" +
+        "<button class=\"mini-btn\" data-ldrop=\"1\">Discard</button>" +
+        "<span class=\"ltot\">Tap a row to fix it.</span></div>";
+    }
+    if (L.edit === "new") h += laborFormHtml({ date:todayYmd(), who:meOnCrew(crew) }, "new", crew);
+
+    if (rows.length){
+      var all = sumBy(rows);
+      h += "<div class=\"ltot\">Job total <strong>" + esc(sumText(all)) + "</strong></div>";
+    } else if (!L.preview && L.edit !== "new"){
+      h += "<div class=\"empty\"><strong>No hours yet</strong>" +
+        (S.canWrite ? "Tap the box below, hit the mic on your keyboard and say who worked, which day, start and end time, and what got done." : "Nothing logged on this job yet.") + "</div>";
+    }
+
+    if (unsent.length){
+      h += "<div class=\"lsec\">Not sent yet · " + esc(sumText(sumBy(unsent))) + "<span class=\"rule\"></span></div>";
+      unsent.forEach(function(r){
+        h += (L.edit === r.id) ? laborFormHtml(r, r.id, crew) : laborRowHtml(r, { tap: S.canWrite ? r.id : "" });
+      });
+      if (S.canWrite){
+        var addr = book ? book.laborEmail : "";
+        h += "<div class=\"lsend\">";
+        if (!addr || L.emailEdit){
+          h += "<div class=\"lline\"><span>Send to</span><input type=\"email\" id=\"laborEmail\" placeholder=\"accountant@example.com\" value=\"" + esc(addr) + "\" autocomplete=\"email\">" +
+            "<button class=\"mini-btn\" data-lemailsave=\"1\">Save</button>" +
+            (addr ? "<button class=\"mini-btn\" data-lemailcancel=\"1\">Cancel</button>" : "") + "</div>";
+        } else {
+          h += "<button class=\"solid-btn small\" data-lsend=\"1\">Email " + unsent.length + " new " +
+            (unsent.length === 1 ? "entry" : "entries") + "</button>" +
+            "<div class=\"lline\"><span>To " + esc(addr) + "</span><button class=\"text-btn\" data-lemailedit=\"1\">change</button></div>";
+        }
+        h += "</div>";
+      }
+    }
+
+    if (sent.length){
+      var batches = {}, order = [];
+      sent.forEach(function(r){
+        var k = r.sendId || r.sentAt;
+        if (!batches[k]){ batches[k] = []; order.push(k); }
+        batches[k].push(r);
+      });
+      order.sort(function(a, b){ return batches[b][0].sentAt.localeCompare(batches[a][0].sentAt); });
+      h += "<div class=\"lsec\">Sent (" + sent.length + ")<span class=\"rule\"></span>" +
+        "<button class=\"text-btn\" data-lshowsent=\"1\">" + (L.showSent ? "Hide" : "Show") + "</button></div>";
+      if (L.showSent){
+        order.forEach(function(k){
+          var b = batches[k], when = b[0].sentAt;
+          h += "<div class=\"lline\"><span>Sent " + esc(dayLabel(when)) + (b[0].sentTo ? " to " + esc(b[0].sentTo) : "") +
+            " · " + esc(sumText(sumBy(b))) + "</span>" +
+            (S.canWrite ? "<button class=\"text-btn\" data-lunsend=\"" + esc(k) + "\">" +
+              (L.armUnsend === k ? "Tap again: mark not sent" : "Didn't go? Mark not sent") + "</button>" : "") + "</div>";
+          b.forEach(function(r){ h += laborRowHtml(r, {}); });
+        });
+      }
+    }
+
+    if (S.canWrite){
+      h += "<div class=\"lline\" style=\"margin-top:6px\">";
+      if (L.crewEdit){
+        h += "<span>Crew</span><input type=\"text\" id=\"laborCrew\" value=\"" + esc(crew.join(", ")) + "\" placeholder=\"Steve, Joe\">" +
+          "<button class=\"mini-btn\" data-lcrewsave=\"1\">Save</button><button class=\"mini-btn\" data-lcrewcancel=\"1\">Cancel</button>";
+      } else {
+        h += "<span>Crew: " + esc(crew.join(", ")) + "</span><button class=\"text-btn\" data-lcrewedit=\"1\">change</button>" +
+          (L.edit || L.preview ? "" : "<span style=\"flex:1\"></span><button class=\"text-btn\" data-ladd=\"1\">+ Add by hand</button>");
+      }
+      h += "</div>";
+    }
+
+    body.innerHTML = h;
+    var f = body.querySelector(".lform input[type=\"date\"]");
+    if (force && f) f.focus();
+    var em = el("laborEmail"); if (force && em && L.emailEdit) em.focus();
+  }
+
+  function laborOpen(){
+    if (!curJob()) return;
+    L.open = true; L.preview = null; L.edit = null; L.armUnsend = null; laborMsg("");
+    renderLabor(true);
+  }
+  function laborClose(){
+    if (L.ctl) try { L.ctl.abort(); } catch (e) {}
+    L.open = false; L.preview = null; L.edit = null; L.busy = false; L.crewEdit = false; L.emailEdit = false;
+    renderLabor(true);
+  }
+
+  function laborParse(){
+    var job = curJob(), said = el("laborInput").value.trim();
+    if (!job || !said || L.busy) return;
+    if (!S.sample){ laborMsg("Claude isn't available right now. Use + Add by hand.", "bad"); renderLabor(true); return; }
+    var crew = crewOf(job), me = meOnCrew(crew), now = new Date();
+    var prompt =
+      "You turn a contractor's spoken work log into labor entries. It may be rough dictation with typos; read through them.\n" +
+      "Today is " + WD[now.getDay()] + " " + todayYmd() + ". Job: \"" + job.name + "\".\n" +
+      "Crew names: " + crew.join(", ") + ". The person talking is " + me + ": \"me\", \"I\" or \"myself\" means " + me + ".\n" +
+      "Rules:\n" +
+      "- One entry per person per day. \"Me and Joe\" makes two entries with the same times.\n" +
+      "- A weekday name means the most recent such day on or before today. \"Yesterday\", \"Monday through Wednesday\" and so on work the same way; a range of days makes one entry per person per day.\n" +
+      "- Times as 24-hour HH:MM. Work days run in daytime: \"7 to 3:30\" is 07:00 to 15:30.\n" +
+      "- breakMin: lunch or break in minutes, 0 if none was said.\n" +
+      "- If only a number of hours was said, leave start and end as \"\" and set hours. Otherwise set hours to 0.\n" +
+      "- note: a short plain summary of the work, under 60 characters, sentence case. Same note for everyone unless said otherwise.\n" +
+      "- Use crew names exactly as listed. A name not on the list is fine, spelled as said.\n" +
+      "- If the day or the hours can't be worked out, return no entries and ask one short question.\n" +
+      "Answer with JSON only, no other text: {\"entries\":[{\"date\":\"YYYY-MM-DD\",\"who\":\"\",\"start\":\"HH:MM\",\"end\":\"HH:MM\",\"breakMin\":0,\"hours\":0,\"note\":\"\"}],\"question\":\"\"}\n\n" +
+      "What he said: " + said;
+    L.busy = true; laborMsg("Reading it…"); renderLabor(true);
+    L.ctl = (window.AbortController ? new AbortController() : null);
+    S.sample(prompt, { modelTier:"default", signal: L.ctl ? L.ctl.signal : undefined }).then(function(r){
+      L.busy = false;
+      var txt = String((r && r.text) || ""), a = txt.indexOf("{"), b = txt.lastIndexOf("}"), o = null;
+      if (a !== -1 && b > a){
+        try { o = JSON.parse(txt.slice(a, b + 1)); }
+        catch (e){ try { o = JSON.parse(mendJson(txt.slice(a, b + 1))); } catch (e2){ o = null; } }
+      }
+      var list = (o && Array.isArray(o.entries)) ? o.entries : [];
+      var out = [];
+      list.forEach(function(x){
+        if (!x || !ymdDate(x.date)) return;
+        var r2 = { date:String(x.date), who:String(x.who || me).trim() || me,
+                   start:String(x.start || ""), end:String(x.end || ""),
+                   breakMin:Math.max(0, parseInt(x.breakMin, 10) || 0),
+                   hours:Math.max(0, Number(x.hours) || 0), note:String(x.note || "").trim().slice(0, 120) };
+        if (toMin(r2.start) == null || toMin(r2.end) == null){ r2.start = ""; r2.end = ""; }
+        r2.hours = hrsOf(r2);
+        if (r2.hours > 0) out.push(r2);
+      });
+      if (!out.length){
+        laborMsg((o && o.question) ? String(o.question) : "Couldn't make hours out of that. Try: \"me, today, 7 to 3:30, framed the porch\".", "bad");
+      } else {
+        L.preview = out; L.edit = null; laborMsg("");
+        el("laborInput").value = "";
+      }
+      renderLabor(true);
+    }).catch(function(e){
+      L.busy = false;
+      laborMsg(e && e.code === "cancelled" ? "" : askCopy(e && e.code) + (e && e.code ? " (" + e.code + ")" : ""), "bad");
+      renderLabor(true);
+    });
+  }
+
+  function laborSaveRows(rows){
+    var job = curJob();
+    if (!job || !S.db) return;
+    var at = nowIso();
+    rows.forEach(function(r){
+      guard(S.db.collection("labor").doc(newId()).set({
+        jobId: job.id, date: r.date, who: r.who, start: r.start, end: r.end,
+        breakMin: r.breakMin, hours: hrsOf(r), note: r.note, createdAt: at, by: S.myId || ""
+      }));
+    });
+  }
+
+  function laborEmailBody(job, rows){
+    var all = sumBy(laborOf(job.id));
+    var lines = [job.name + " — labor log", ""];
+    rows.forEach(function(r){
+      var span = timeSpan(r);
+      lines.push(fmtDay(r.date) + " · " + r.who + (span ? " · " + span : "") + " · " + fmtHrs(hrsOf(r)) + " hrs");
+      if (r.note) lines.push("    " + r.note);
+    });
+    lines.push("");
+    lines.push("This batch: " + sumText(sumBy(rows)));
+    lines.push("Job to date: " + sumText(all));
+    lines.push("");
+    lines.push("Sent from Job Book");
+    return lines.join("\n");
+  }
+
+  function laborSend(){
+    var job = curJob(), book = jobBookRec(job);
+    if (!job || !book || !S.db) return;
+    var addr = (book.laborEmail || "").trim();
+    if (!emailOk(addr)){ L.emailEdit = true; renderLabor(true); return; }
+    var rows = laborOf(job.id).filter(function(r){ return !r.sentAt; });
+    if (!rows.length) return;
+    var first = rows[0].date, last = rows[rows.length - 1].date;
+    var subject = job.name + " – labor " + shortMD(first) + (last !== first ? "–" + shortMD(last) : "");
+    var body = laborEmailBody(job, rows);
+    var sendId = newId(), at = nowIso();
+    rows.forEach(function(r){
+      guard(S.db.collection("labor").doc(r.id).update({ sentAt: at, sendId: sendId, sentTo: addr }));
+    });
+    laborMsg("Your mail app should open with the email ready. Tap Send there. If it didn't go, open Sent and tap \"Mark not sent\".", "good");
+    renderLabor(true);
+    location.href = "mailto:" + addr + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  }
+
+  el("laborBtn").addEventListener("click", laborOpen);
+  el("laborClose").addEventListener("click", laborClose);
+  el("laborAdd").addEventListener("click", laborParse);
+  el("laborInput").addEventListener("input", function(){
+    var t = el("laborInput");
+    t.style.height = "auto";
+    t.style.height = Math.min(120, Math.max(46, t.scrollHeight)) + "px";
+  });
+  el("laborInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); laborParse(); }
+  });
+
+  el("laborBody").addEventListener("click", function(e){
+    var job = curJob(); if (!job) return;
+    var t;
+    if ((t = e.target.closest("[data-lsave]"))){
+      var key = t.getAttribute("data-lsave");
+      var r = readForm(t.closest(".lform"));
+      if (!ymdDate(r.date) || !r.who || !(r.hours > 0)){ laborMsg("Needs a date, a name and some hours.", "bad"); renderLabor(true); return; }
+      laborMsg("");
+      if (key === "new") laborSaveRows([r]);
+      else if (key.charAt(0) === "p" && L.preview) L.preview[+key.slice(1)] = r;
+      else if (S.db) guard(S.db.collection("labor").doc(key).update({
+        date:r.date, who:r.who, start:r.start, end:r.end, breakMin:r.breakMin, hours:r.hours, note:r.note }));
+      L.edit = null; renderLabor(true); return;
+    }
+    if (e.target.closest("[data-lcancel]")){ L.edit = null; laborMsg(""); renderLabor(true); return; }
+    if ((t = e.target.closest("[data-ldel]"))){
+      var k = t.getAttribute("data-ldel");
+      if (k.charAt(0) === "p" && L.preview){
+        L.preview.splice(+k.slice(1), 1);
+        if (!L.preview.length) L.preview = null;
+      } else if (S.db) guard(S.db.collection("labor").doc(k).delete());
+      L.edit = null; renderLabor(true); return;
+    }
+    if (e.target.closest("[data-lkeep]")){
+      laborSaveRows(L.preview || []);
+      laborMsg("Saved.", "good");
+      L.preview = null; renderLabor(true); return;
+    }
+    if (e.target.closest("[data-ldrop]")){ L.preview = null; L.edit = null; laborMsg(""); renderLabor(true); return; }
+    if (e.target.closest("[data-ladd]")){ L.edit = "new"; laborMsg(""); renderLabor(true); return; }
+    if (e.target.closest("[data-lsend]")){ laborSend(); return; }
+    if (e.target.closest("[data-lemailedit]")){ L.emailEdit = true; renderLabor(true); return; }
+    if (e.target.closest("[data-lemailcancel]")){ L.emailEdit = false; renderLabor(true); return; }
+    if (e.target.closest("[data-lemailsave]")){
+      var v = (el("laborEmail").value || "").trim(), bk = jobBookRec(job);
+      if (!emailOk(v)){ laborMsg("That doesn't look like an email address.", "bad"); renderLabor(true); return; }
+      if (bk && S.db) guard(S.db.collection("books").doc(bk.id).update({ laborEmail: v }));
+      if (bk) bk.laborEmail = v;
+      L.emailEdit = false; laborMsg(""); renderLabor(true); return;
+    }
+    if (e.target.closest("[data-lcrewedit]")){ L.crewEdit = true; renderLabor(true); return; }
+    if (e.target.closest("[data-lcrewcancel]")){ L.crewEdit = false; renderLabor(true); return; }
+    if (e.target.closest("[data-lcrewsave]")){
+      var names = (el("laborCrew").value || "").split(/[,;]/).map(function(s){ return s.trim(); })
+        .filter(function(s, i, a){ return s && a.indexOf(s) === i; }).slice(0, 20);
+      var bk2 = jobBookRec(job);
+      if (names.length && bk2 && S.db){ guard(S.db.collection("books").doc(bk2.id).update({ laborCrew: names })); bk2.laborCrew = names; }
+      L.crewEdit = false; renderLabor(true); return;
+    }
+    if (e.target.closest("[data-lshowsent]")){ L.showSent = !L.showSent; L.armUnsend = null; renderLabor(true); return; }
+    if ((t = e.target.closest("[data-lunsend]"))){
+      var sid = t.getAttribute("data-lunsend");
+      if (L.armUnsend !== sid){ L.armUnsend = sid; renderLabor(true); return; }
+      L.armUnsend = null;
+      laborOf(job.id).forEach(function(r){
+        if (r.sentAt && (r.sendId || r.sentAt) === sid && S.db)
+          guard(S.db.collection("labor").doc(r.id).update({ sentAt:"", sendId:"", sentTo:"" }));
+      });
+      laborMsg("Marked not sent. They'll go out with the next email.", "good");
+      renderLabor(true); return;
+    }
+    if ((t = e.target.closest("[data-ledit]")) && S.canWrite && !e.target.closest(".lform")){
+      L.edit = t.getAttribute("data-ledit"); laborMsg(""); renderLabor(true); return;
+    }
+  });
+
   /* ---------- boot ---------- */
 
   render();
@@ -2823,7 +3336,9 @@
     db.collection("books").onSnapshot(function(snap){
       S.books = snap.docs.map(function(d){
         var v = d.data() || {};
-        return { id:d.id, name:v.name || "Untitled book", createdAt:v.createdAt || "" };
+        return { id:d.id, name:v.name || "Untitled book", createdAt:v.createdAt || "",
+                 laborEmail:v.laborEmail || "",
+                 laborCrew:Array.isArray(v.laborCrew) ? v.laborCrew : [] };
       });
       S.books.sort(function(a,b){ return (a.createdAt || "").localeCompare(b.createdAt || ""); });
       var known = S.books.some(function(b){ return b.id === S.bookId; });
@@ -2843,6 +3358,18 @@
                  doneBy:v.doneBy || "", doneAt:v.doneAt || "",
                  scheduledAt:v.scheduledAt || "", scheduledEnd:v.scheduledEnd || "",
                  allDay:!!v.allDay };
+      });
+      render();
+    }, onErr);
+
+    db.collection("labor").onSnapshot(function(snap){
+      S.labor = snap.docs.map(function(d){
+        var v = d.data() || {};
+        return { id:d.id, jobId:v.jobId || "", date:v.date || "", who:v.who || "",
+                 start:v.start || "", end:v.end || "", breakMin:Number(v.breakMin) || 0,
+                 hours:Number(v.hours) || 0, note:v.note || "", createdAt:v.createdAt || "",
+                 sentAt:v.sentAt || "", sendId:v.sendId || "", sentTo:v.sentTo || "",
+                 filedAt:v.filedAt || "" };
       });
       render();
     }, onErr);
