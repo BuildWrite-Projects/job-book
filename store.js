@@ -290,15 +290,17 @@
   function signInSheet(done) {
     var box = sheet(
       '<div id="jbtitle" style="' + TITLE + '">Sign in to Job Book</div>' +
-      '<div style="font-size:.92rem;line-height:1.5;color:var(--ink-soft,#666)">Same email and password as Field Measure.</div>' +
+      '<div style="font-size:.92rem;line-height:1.5;color:var(--ink-soft,#666)">One account for Job Book, Receipt Run and Field Measure.</div>' +
       '<input id="jbem" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" placeholder="you@example.com" style="' + FIELD + '">' +
       '<input id="jbpw" type="password" autocomplete="current-password" placeholder="password" style="' + FIELD + '">' +
+      '<input id="jbpw2" type="password" autocomplete="new-password" placeholder="type the password again" style="' + FIELD + ';display:none">' +
       '<div id="jbmsg" style="font-size:.88rem;line-height:1.45;min-height:18px;color:var(--ink-soft,#666)"></div>' +
       '<button id="jbgo" style="' + BTN + '">Sign in</button>' +
       '<button id="jbswap" style="' + LINK + '">Create an account instead</button>');
     var msg = box.querySelector('#jbmsg');
     var go = box.querySelector('#jbgo');
     var pw = box.querySelector('#jbpw');
+    var pw2 = box.querySelector('#jbpw2');
     var swap = box.querySelector('#jbswap');
     var title = box.querySelector('#jbtitle');
     var creating = false;
@@ -309,7 +311,9 @@
       go.textContent = creating ? 'Create account' : 'Sign in';
       swap.textContent = creating ? 'I already have an account' : 'Create an account instead';
       pw.setAttribute('autocomplete', creating ? 'new-password' : 'current-password');
-      msg.textContent = creating ? 'Pick something at least 8 characters.' : '';
+      pw2.style.display = creating ? '' : 'none';
+      pw2.value = '';
+      msg.textContent = creating ? 'Pick something at least 8 characters, and type it twice.' : '';
     };
 
     function submit() {
@@ -317,6 +321,7 @@
       var pass = pw.value || '';
       if (!email || !pass) { msg.textContent = 'Fill in both boxes.'; return; }
       if (creating && pass.length < 8) { msg.textContent = 'Use at least 8 characters.'; return; }
+      if (creating && pass !== (pw2.value || '')) { msg.textContent = 'The two passwords don’t match. Type them again.'; pw2.value = ''; pw2.focus(); return; }
       go.disabled = true;
       msg.textContent = creating ? 'Creating…' : 'Signing in…';
       var call = creating
@@ -343,28 +348,72 @@
       });
     }
     go.onclick = submit;
-    pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+    pw.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !creating) submit(); });
+    pw2.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
   }
 
   function notMemberSheet() {
     var box = sheet(
-      '<div style="' + TITLE + '">Not on the list yet</div>' +
+      '<div style="' + TITLE + '">No invite yet</div>' +
       '<div style="font-size:.95rem;line-height:1.5">You’re signed in as <strong>' + esc(session.user.email) +
-      '</strong>, but this account isn’t on the Job Book members list, so there’s nothing to show. ' +
-      'Ask Stephen to add you.</div>' +
+      '</strong>, but there’s no invite for this email, so there’s nothing to show yet. ' +
+      'Ask the person who shared the app to invite this email address, then open it again.</div>' +
       '<button id="jbok" style="' + BTN + '">OK</button>' +
       '<button id="jbout" style="' + LINK + '">Sign out</button>');
     box.querySelector('#jbok').onclick = function () { box.remove(); };
     box.querySelector('#jbout').onclick = function () { client.auth.signOut(); };
   }
 
+  /* First sign-in with an invite: start your own team (a friend), or join
+     the team you were invited to. */
+  function teamSetupSheet(invite) {
+    return new Promise(function (resolve) {
+      var joining = invite.kind === 'join';
+      var box = sheet(
+        '<div style="' + TITLE + '">' + (joining ? 'Join ' + esc(invite.teamName || 'the team') : 'Name your team') + '</div>' +
+        '<div style="font-size:.95rem;line-height:1.5">' + (joining
+          ? 'You’ve been invited to <strong>' + esc(invite.teamName || 'a team') + '</strong>. You’ll see its jobs in Job Book, Receipt Run and Field Measure.'
+          : 'Your jobs, receipts and measurements live in your own team. Nobody else sees them. Use your business name, or your own name.') + '</div>' +
+        (joining ? '' : '<input id="jbteam" type="text" autocomplete="organization" placeholder="e.g. Sam’s Builds" style="' + FIELD + '">') +
+        '<div id="jbtmsg" style="font-size:.88rem;line-height:1.45;min-height:18px;color:var(--ink-soft,#666)"></div>' +
+        '<button id="jbtgo" style="' + BTN + '">' + (joining ? 'Join' : 'Start my team') + '</button>' +
+        '<button id="jbtout" style="' + LINK + '">Sign out</button>');
+      var msg = box.querySelector('#jbtmsg'), go = box.querySelector('#jbtgo'), nm = box.querySelector('#jbteam');
+      box.querySelector('#jbtout').onclick = function () { client.auth.signOut(); };
+      if (nm) setTimeout(function () { try { nm.focus(); } catch (e) {} }, 60);
+      function submit() {
+        var name = nm ? (nm.value || '').trim() : null;
+        if (nm && !name) { msg.textContent = 'Type a name for your team.'; nm.focus(); return; }
+        go.disabled = true; msg.textContent = joining ? 'Joining…' : 'Setting up your team…';
+        client.rpc('accept_invite', { team_name: name }).then(function (r) {
+          go.disabled = false;
+          if (r.error) { msg.textContent = r.error.message || 'That did not go through.'; return; }
+          box.remove(); resolve();
+        }, function () { go.disabled = false; msg.textContent = 'Could not reach the server. Check your signal.'; });
+      }
+      go.onclick = submit;
+      if (nm) nm.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+    });
+  }
+
+  /* In = on a team. Everything a team holds is only ever shown to its
+     members (the database enforces it); this just decides what to show. */
   function checkMembership() {
-    return client.from('jobbook_members').select('user_id').eq('user_id', session.user.id).maybeSingle()
-      .then(function (r) {
-        if (r.error) throw mapErr(r.error);
-        isMember = !!r.data;
-        if (!isMember) notMemberSheet();
-      });
+    return client.rpc('my_team_status').then(function (r) {
+      if (r.error) throw mapErr(r.error);
+      var st = r.data || {};
+      if (st.team) { isMember = true; window.BW_TEAM = st.team; return; }
+      if (st.invite) {
+        return teamSetupSheet(st.invite).then(function () {
+          return client.rpc('my_team_status').then(function (r2) {
+            var t = r2.data && r2.data.team;
+            isMember = !!t; window.BW_TEAM = t || null;
+          });
+        });
+      }
+      isMember = false;
+      notMemberSheet();
+    });
   }
 
   function ready() {
