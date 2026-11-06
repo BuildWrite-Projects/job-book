@@ -595,11 +595,81 @@
     }
   };
 
+  /* ---------- Ask Claude -------------------------------------------------- */
+  /* On claude.ai the page asked the host to talk to Claude. Here it goes to
+     the jobbook-ask Supabase function, which holds the Claude key. Claude may
+     answer in words or ask for actions (add a note, flag urgent...); the
+     actions are the panel's own (index.html askTools), run here, signed in as
+     this person, and their results go back to Claude until it answers.
+     Called as sample(turns, {tools, signal, onText}) -> {text}. */
+  function askErr(code, message) { var e = err(code, message); return e; }
+  function mergeTurns(turns) {
+    var out = [];
+    (typeof turns === 'string' ? [{ role: 'user', content: turns }] : turns || []).forEach(function (t) {
+      var role = t.role === 'assistant' ? 'assistant' : 'user';
+      var text = String(t.content == null ? '' : t.content);
+      if (!text) return;
+      var last = out[out.length - 1];
+      if (last && last.role === role && typeof last.content === 'string') last.content += '\n\n' + text;
+      else out.push({ role: role, content: text });
+    });
+    if (out.length && out[0].role !== 'user') out.unshift({ role: 'user', content: '(start)' });
+    return out;
+  }
+  function sampleFn(turns, opts) {
+    opts = opts || {};
+    var tools = opts.tools || [];
+    var defs = tools.map(function (t) { return { name: t.name, description: t.description, input_schema: t.inputSchema }; });
+    var messages = mergeTurns(turns);
+    var rounds = 0;
+    function cancelled() { return opts.signal && opts.signal.aborted; }
+    function step() {
+      if (cancelled()) return Promise.reject(askErr('cancelled', 'Stopped'));
+      if (++rounds > 6) return Promise.reject(askErr('ask_failed', 'Too many steps'));
+      return client.functions.invoke('jobbook-ask', { body: { messages: messages, tools: defs } }).then(function (r) {
+        if (cancelled()) throw askErr('cancelled', 'Stopped');
+        if (r.error) throw askErr('network', r.error.message);
+        var d = r.data || {};
+        if (!d.ok) throw askErr(d.code || 'ask_failed', d.message);
+        var content = d.content || [];
+        var text = content.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n')
+          .replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, '').trim();   // the panel shows plain text
+        var uses = content.filter(function (b) { return b.type === 'tool_use'; });
+        if (text && opts.onText) { try { opts.onText({ text: text }); } catch (e) { /* ignore */ } }
+        if (!uses.length || d.stop_reason !== 'tool_use') return { text: text };
+        messages.push({ role: 'assistant', content: content });
+        var results = [];
+        var chain = Promise.resolve();
+        uses.forEach(function (u) {
+          chain = chain.then(function () {
+            var tool = tools.filter(function (t) { return t.name === u.name; })[0];
+            if (!tool) { results.push({ type: 'tool_result', tool_use_id: u.id, content: 'No such action: ' + u.name, is_error: true }); return; }
+            return Promise.resolve().then(function () { return tool.execute(u.input || {}); }).then(function (res) {
+              results.push({ type: 'tool_result', tool_use_id: u.id, content: String(res == null ? 'Done' : res) });
+            }, function (e) {
+              results.push({ type: 'tool_result', tool_use_id: u.id, content: String((e && e.message) || e || 'Failed'), is_error: true });
+            });
+          });
+        });
+        return chain.then(function () {
+          messages.push({ role: 'user', content: results });
+          return step();
+        });
+      });
+    }
+    return step();
+  }
+
   /* ---------- what index.html calls --------------------------------------- */
 
   window.claude = window.claude || {};
   window.claude.use = function (what) {
     if (what === 'mcp') return Promise.resolve(mcpApi);
+    /* Ask Claude: only for someone on a team (the function checks again). */
+    if (what === 'sample') return ready().then(function () {
+      if (!isMember) throw err('not_granted', 'Not on a team');
+      return sampleFn;
+    });
     if (what === 'db') return ready().then(function () { return dbApi; });
     if (what === 'user') return ready().then(function () { return userApi; });
     return Promise.reject(err('not_available', what + ' is not available in this version yet'));

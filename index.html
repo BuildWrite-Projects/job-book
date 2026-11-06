@@ -1059,7 +1059,7 @@
     el("addJobBtn").hidden = true;
     el("noteSave").disabled = true;
     el("noteInput").disabled = true;
-    el("noteInput").placeholder = "Read-only — ask Stephen for Contributor access to add notes.";
+    el("noteInput").placeholder = "Read-only — ask your team's owner for access to add notes.";
   }
 
   /* ---------- rendering ---------- */
@@ -2412,7 +2412,7 @@
   }
 
   var ASK_RULES =
-    "You are helping Stephen run a construction job book from inside the app itself. " +
+    "You are helping the person using this app run their construction job book, from inside the app itself. " +
     "He is often in a truck and talking, so his message may be rough dictation \u2014 read through typos and odd spellings.\n\n" +
     "Use the tools to change the book. Match a job he names to the closest job in the list below, even if he says it loosely " +
     "or misspells it; if two could match, ask which rather than guessing. If he names a job that does not exist, say so and " +
@@ -2424,6 +2424,7 @@
     "inspector signs off' — set it waiting instead of urgent, and when he says he got it, clear the waiting flag. " +
     "Items already marked show as [URGENT] or [WAITING] below.\n\n" +
     "Answer questions about what is open straight from the list below, briefly. Do not invent jobs, notes or dates.\n\n" +
+    "Reply in plain text for a small phone screen: no markdown, no asterisks, no headings.\n\n" +
     "Here is the book as it stands right now:\n\n";
 
   function findJobByName(name){
@@ -2575,7 +2576,7 @@
     },
     {
       name: "add_job",
-      description: "Create a new job in the current book. Only when Stephen asks for a new job. Returns its name.",
+      description: "Create a new job in the current book. Only when the person asks for a new job. Returns its name.",
       inputSchema: {
         type: "object",
         properties: { name: { type: "string", description: "Name of the new job." } },
@@ -2609,8 +2610,14 @@
       return "Claude wouldn't answer that one. Try saying it differently.";
     if (code === "empty_completion")
       return "No answer came back. Try saying it a bit differently.";
-    if (code === "prompt_too_large")
+    if (code === "prompt_too_large" || code === "invalid_argument")
       return "That's too much at once. Say it shorter.";
+    if (code === "monthly_cap")
+      return "Your team has used this month's Ask Claude requests. They reset on the 1st.";
+    if (code === "no_credit")
+      return "Claude is out of credit on the account that runs it. Let the app's owner know.";
+    if (code === "network")
+      return "Couldn't reach Claude. Check your signal and try again.";
     return "That didn't go through. Try again.";
   }
 
