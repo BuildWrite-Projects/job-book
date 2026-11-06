@@ -3187,7 +3187,9 @@
     });
     laborMsg("Your mail app should open with the email ready. Tap Send there. If it didn't go, open Sent and tap \"Mark not sent\".", "good");
     renderLabor(true);
-    location.href = "mailto:" + addr + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    var url = "mailto:" + addr + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+    // window.JB_openMail lets a test catch the email instead of opening a mail app.
+    if (typeof window.JB_openMail === "function") window.JB_openMail(url); else location.href = url;
   }
 
   el("laborBtn").addEventListener("click", laborOpen);
