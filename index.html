@@ -11,10 +11,52 @@
 <meta name="theme-color" content="#14181b" media="(prefers-color-scheme: dark)">
 <!-- Data: Supabase, answered through the same calls the app made on claude.ai -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
-<script src="config.js"></script>
-<script src="store.js"></script>
-<script src="feedback.js"></script>
+<!-- App version. Bump it (here AND in the three ?v= below) on every change that
+     goes live, so phones holding an older saved copy pick up the new one. -->
+<meta name="jb-version" content="2026-11-06c">
+<script src="config.js?v=2026-11-06c"></script>
+<script src="store.js?v=2026-11-06c"></script>
+<script src="feedback.js?v=2026-11-06c"></script>
 <script>
+  /* New-version check. GitHub Pages lets a phone reuse its saved copy of the
+     app for up to 10 minutes, and a home-screen app can hold on longer. Each
+     time the app opens or comes back on screen, ask the server (skipping any
+     saved copy) which version is current. If it's newer than this one, load
+     it -- but never in the middle of typing or with a sheet open. */
+  (function () {
+    var mine = (document.querySelector('meta[name="jb-version"]') || {}).content || '';
+    var busy = false;
+    function midTask() {
+      var a = document.activeElement;
+      if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && a.value) return true;
+      var sheets = document.querySelectorAll('.ask-sheet');
+      for (var i = 0; i < sheets.length; i++) if (!sheets[i].hidden) return true;
+      return false;
+    }
+    function check() {
+      if (busy || !mine || !window.fetch) return;
+      busy = true;
+      fetch(location.pathname + '?vcheck=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+        return r.ok ? r.text() : '';
+      }).then(function (html) {
+        busy = false;
+        var m = /<meta name="jb-version" content="([^"]+)"/.exec(html || '');
+        var live = m && m[1];
+        if (!live || live === mine) return;
+        var tried = '';
+        try { tried = sessionStorage.getItem('jb.reloadedFor') || ''; } catch (e) {}
+        if (tried === live) return;            // already tried once: don't loop
+        if (midTask()) return;                 // try again next time it comes on screen
+        try { sessionStorage.setItem('jb.reloadedFor', live); } catch (e) {}
+        location.replace(location.pathname + '?v=' + encodeURIComponent(live) + location.hash);
+      }).catch(function () { busy = false; });
+    }
+    window.addEventListener('load', function () { setTimeout(check, 1500); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') check();
+    });
+  })();
+
   /* Feedback button in the top bar, beside "+ Job" */
   document.addEventListener('DOMContentLoaded', function () {
     var bar = document.querySelector('.topbar .bar-inner');
