@@ -486,23 +486,112 @@
     if (tz) q.push('ctz=' + encodeURIComponent(tz));
     return 'https://calendar.google.com/calendar/render?' + q.join('&');
   }
+  /* Which calendar this phone sends to. Each person picks once (kept on this
+     phone); Google is what Stephen has always used. Nothing is linked or
+     signed into here: the event opens filled in, in that person's own
+     calendar, or arrives as a calendar file their phone adds. */
+  var CAL_KEY = 'jobbook.calendar.v1';
+  var CALS = [
+    ['google', 'Google Calendar', 'Opens Google Calendar filled in. Tap Save.'],
+    ['outlook', 'Outlook.com', 'Personal Outlook, Hotmail or Live. Opens filled in. Tap Save.'],
+    ['office', 'Outlook for work', 'A work or school Microsoft 365 account. Opens filled in. Tap Save.'],
+    ['ics', 'iPhone or other calendar', 'Downloads a calendar file with a reminder. Open it to add it.']
+  ];
+  function calName(k) { for (var i = 0; i < CALS.length; i++) if (CALS[i][0] === k) return CALS[i][1]; return 'Google Calendar'; }
+  function calGet() { try { return localStorage.getItem(CAL_KEY) || ''; } catch (e) { return ''; } }
+  function calSet(k) { try { localStorage.setItem(CAL_KEY, k); } catch (e) { /* ignore */ } }
+  function calChoose(onPick) {
+    var cur = calGet();
+    var box = sheet('<div style="' + TITLE + '">Which calendar?</div>' +
+      '<div style="font-size:.92rem;line-height:1.5;color:var(--ink-soft,#666)">Job Book sends reminders to the calendar you use. You only pick once on this phone; you can change it any time.</div>' +
+      CALS.map(function (c) {
+        return '<button data-cal="' + c[0] + '" style="text-align:left;border:1px solid ' + (c[0] === cur ? 'var(--accent,#15607a)' : 'var(--line,#ccc)') +
+          ';border-radius:8px;padding:11px 12px;background:var(--paper,#f4f4f4);color:var(--ink,#111);font-size:1rem">' +
+          '<b>' + esc(c[1]) + '</b><br><span style="font-size:.85rem;color:var(--ink-soft,#666)">' + esc(c[2]) + '</span></button>';
+      }).join('') +
+      '<button id="jbcalx" style="' + LINK + '">Cancel</button>');
+    box.querySelector('#jbcalx').onclick = function () { box.remove(); onPick(null); };
+    box.querySelectorAll('[data-cal]').forEach(function (b) {
+      b.onclick = function () { var k = b.getAttribute('data-cal'); calSet(k); box.remove(); onPick(k); };
+    });
+  }
+  window.JB_calendar = { get: calGet, name: function () { return calName(calGet() || 'google'); }, choose: calChoose };
+
+  function outlookLink(base, p) {
+    var day = function (iso) { return String(iso).slice(0, 10); };
+    var q = [
+      'path=%2Fcalendar%2Faction%2Fcompose', 'rru=addevent',
+      'subject=' + encodeURIComponent(p.summary || 'Job Book item'),
+      'body=' + encodeURIComponent(p.description || ''),
+      'startdt=' + encodeURIComponent(p.allDay ? day(p.startTime) : new Date(p.startTime).toISOString()),
+      'enddt=' + encodeURIComponent(p.allDay ? day(p.endTime) : new Date(p.endTime).toISOString())
+    ];
+    if (p.allDay) q.push('allday=true');
+    return base + '/calendar/0/deeplink/compose?' + q.join('&');
+  }
+  /* A standard calendar file (Apple Calendar, Samsung, Outlook desktop...)
+     with a reminder: 30 minutes before, or 8 am on the day for all-day. */
+  function icsText(p) {
+    var esc2 = function (s) { return String(s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1'); };
+    var stamp = function (iso) { return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+    var lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//BuildWrite//Job Book//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT', 'UID:' + Date.now().toString(36) + Math.random().toString(36).slice(2) + '@jobbook',
+      'DTSTAMP:' + stamp(new Date().toISOString())];
+    if (p.allDay) {
+      lines.push('DTSTART;VALUE=DATE:' + gcalStamp(p.startTime, true), 'DTEND;VALUE=DATE:' + gcalStamp(p.endTime, true));
+    } else {
+      lines.push('DTSTART:' + stamp(p.startTime), 'DTEND:' + stamp(p.endTime));
+    }
+    lines.push('SUMMARY:' + esc2(p.summary || 'Job Book item'), 'DESCRIPTION:' + esc2(p.description),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc2(p.summary || 'Job Book item'),
+      'TRIGGER:' + (p.allDay ? 'PT8H' : '-PT30M'), 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR');
+    return lines.join('\r\n') + '\r\n';
+  }
+  function openLink(url) {
+    var w = null;
+    /* No 'noopener' flag: with it, window.open always reports failure, and
+       the fallback below would open the calendar a second time. */
+    try { w = window.open(url, '_blank'); } catch (e) { w = null; }
+    if (w) { try { w.opener = null; } catch (e) { /* ignore */ } }
+    else { try { location.assign(url); } catch (e) { /* nothing left to try */ } }
+  }
+  function sendTo(k, p) {
+    if (k === 'ics') {
+      var blob = new Blob([icsText(p)], { type: 'text/calendar;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = String(p.summary || 'Job Book item').replace(/[^\w \-]+/g, '').slice(0, 60).trim() + '.ics';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+      return { opened: true, ics: true, calendar: calName(k) };
+    }
+    var url = k === 'outlook' ? outlookLink('https://outlook.live.com', p)
+            : k === 'office' ? outlookLink('https://outlook.office.com', p)
+            : calendarLink(p);
+    window.__lastCalendarLink = url;
+    openLink(url);
+    return { opened: true, url: url, calendar: calName(k) };
+  }
+
   var mcpApi = {
     has: function (server) { return server === 'Google Calendar'; },
     /* Called straight from the tap on Send, so the browser allows it to open
-       a new page. */
+       a new page. The first time on a phone, it asks which calendar; the tap
+       on that choice opens it. */
     callTool: function (server, tool, payload) {
       if (server !== 'Google Calendar' || tool !== 'create_event') {
         return Promise.reject(err('server_not_connected', server + ' is not available in this version'));
       }
-      var url = calendarLink(payload || {});
-      window.__lastCalendarLink = url;
-      var w = null;
-      /* No 'noopener' flag: with it, window.open always reports failure, and
-         the fallback below would open the calendar a second time. */
-      try { w = window.open(url, '_blank'); } catch (e) { w = null; }
-      if (w) { try { w.opener = null; } catch (e) { /* ignore */ } }
-      else { try { location.assign(url); } catch (e) { /* nothing left to try */ } }
-      return Promise.resolve({ opened: true, url: url });
+      var p = payload || {};
+      /* Stephen's team has always used Google; it carries on without asking. */
+      var k = calGet() || (window.BW_TEAM && window.BW_TEAM.founding ? 'google' : '');
+      if (k) return Promise.resolve(sendTo(k, p));
+      return new Promise(function (resolve, reject) {
+        calChoose(function (picked) {
+          if (!picked) { reject(err('cancelled', 'No calendar picked')); return; }
+          resolve(sendTo(picked, p));
+        });
+      });
     }
   };
 

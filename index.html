@@ -1422,6 +1422,8 @@
         "<button class=\"solid-btn small\" data-calsend=\"" + esc(n.id) + "\"" + (S.calBusy ? " disabled" : "") + ">" +
           (S.calBusy ? "Sending…" : "Send") + "</button>" +
         "<button class=\"mini-btn\" data-calclose=\"1\">Close</button>" +
+        (window.JB_calendar && (JB_calendar.get() || (window.BW_TEAM && BW_TEAM.founding))
+          ? "<button class=\"text-btn\" data-calpick=\"1\">" + esc(JB_calendar.name()) + " · change</button>" : "") +
         (st ? "<span class=\"cal-status " + esc(st.kind) + "\">" + esc(st.msg) + "</span>" : "") +
       "</div>";
     }
@@ -1569,8 +1571,10 @@
       S.calBusy = false;
       /* On GitHub Pages the event opens filled-in in Google Calendar for one
          tap on Save (store.js), rather than being sent behind the scenes. */
-      S.calStatus = { id:n.id, kind:"good", msg: (r && r.opened)
-        ? "Opened in Google Calendar — tap Save there."
+      S.calStatus = { id:n.id, kind:"good", msg: (r && r.ics)
+        ? "Calendar file downloaded — open it to add the reminder."
+        : (r && r.opened)
+        ? "Opened in " + (r.calendar || "Google Calendar") + " — tap Save there."
         : allDay
         ? (lastDay === dayOne ? "On your calendar, all day." : "On your calendar, " + dayLabel(startIso) + "–" + dayLabel(localDate(lastDay, "00:00")) + ".")
         : "On your calendar." };
@@ -1587,7 +1591,8 @@
       }, 1800);
     }).catch(function(err){
       S.calBusy = false;
-      S.calStatus = { id:n.id, kind:"bad", msg: calErrorMsg(err) };
+      /* closing the "Which calendar?" picker is not an error */
+      S.calStatus = (err && err.code === "cancelled") ? null : { id:n.id, kind:"bad", msg: calErrorMsg(err) };
       render();
     });
   }
@@ -1909,6 +1914,8 @@
     if (e.target.closest("[data-calclose]")){
       S.calOpen = null; S.calStatus = null; render(); return;
     }
+    t = e.target.closest("[data-calpick]");
+    if (t && window.JB_calendar){ JB_calendar.choose(function(){ render(); }); return; }
     t = e.target.closest("[data-calsend]");
     if (t && !S.calBusy){
       n = find(t.getAttribute("data-calsend"));
@@ -2015,13 +2022,21 @@
     hideToast();
     var raw = a.getAttribute("data-raw") || a.textContent;
 
-    // The mail is written here and left in Gmail drafts, which works where
-    // handing off to the mail app does not. With no Gmail to write to, the
-    // address goes on the clipboard instead.
+    // On claude.ai the mail was written here and left in Gmail drafts. On
+    // the web there is no Gmail link, so the address opens a new message in
+    // whatever mail app the phone uses (Gmail, Outlook, Apple Mail...). A
+    // phone or computer with no mail app set up gets the address copied.
     e.preventDefault();
     if (S.mcp && (!S.mcp.has || S.mcp.has("Gmail"))){ openMail(raw); return; }
     copyText(raw);
-    copiedToast(raw);
+    var shown = false;
+    var onBlur = function(){ shown = true; };
+    window.addEventListener("blur", onBlur, { once:true });
+    location.href = "mailto:" + raw;
+    setTimeout(function(){
+      window.removeEventListener("blur", onBlur);
+      if (!shown && document.visibilityState === "visible") copiedToast(raw);
+    }, 900);
   });
 
   /* ---------- email a contact ---------- */
