@@ -3155,19 +3155,52 @@
     });
   }
 
+  /* The email is plain text so it opens in any mail app. Laid out one block
+     per day, one line per person, the work note once per day when everyone
+     did the same thing, and the totals set off at the bottom. */
   function laborEmailBody(job, rows){
-    var all = sumBy(laborOf(job.id));
-    var lines = [job.name + " — labor log", ""];
+    function padR(s, n){ s = String(s); while (s.length < n) s += " "; return s; }
+    function span(r){ var s = fmtTime(r.start), e = fmtTime(r.end); return s && e ? s + " – " + e : ""; }
+    function lunch(m){ return m ? " (" + m + " min lunch)" : ""; }
+    function perText(sm){
+      return sm.order.length > 1 ? "   (" + sm.order.map(function(w){ return w + " " + fmtHrs(sm.per[w]); }).join(", ") + ")" : "";
+    }
+    var days = {}, order = [];
     rows.forEach(function(r){
-      var span = timeSpan(r);
-      lines.push(fmtDay(r.date) + " · " + r.who + (span ? " · " + span : "") + " · " + fmtHrs(hrsOf(r)) + " hrs");
-      if (r.note) lines.push("    " + r.note);
+      if (!days[r.date]){ days[r.date] = []; order.push(r.date); }
+      days[r.date].push(r);
     });
-    lines.push("");
-    lines.push("This batch: " + sumText(sumBy(rows)));
-    lines.push("Job to date: " + sumText(all));
-    lines.push("");
-    lines.push("Sent from Job Book");
+    order.sort();
+    var wName = 0, wTime = 0;
+    rows.forEach(function(r){
+      wName = Math.max(wName, (r.who || "?").length);
+      wTime = Math.max(wTime, span(r).length);
+    });
+    var first = order[0], last = order[order.length - 1];
+    var lines = [job.name + " — Labor Log",
+      "New entries: " + fmtDay(first) + (last !== first ? " – " + fmtDay(last) : ""), "", ""];
+
+    order.forEach(function(d){
+      var dr = days[d];
+      var sameNote = dr.every(function(r){ return r.note === dr[0].note; });
+      var sameBrk = dr.every(function(r){ return r.breakMin === dr[0].breakMin; });
+      lines.push(fmtDay(d).toUpperCase());
+      dr.forEach(function(r){
+        lines.push("   " + padR(r.who || "?", wName) + "   " +
+          (wTime ? padR(span(r), wTime) + "   " : "") + fmtHrs(hrsOf(r)) + " hrs" +
+          (sameBrk ? "" : lunch(r.breakMin)));
+        if (!sameNote && r.note) lines.push("      Work: " + r.note);
+      });
+      if (sameNote && dr[0].note) lines.push("   Work: " + dr[0].note + (sameBrk ? lunch(dr[0].breakMin) : ""));
+      else if (sameBrk && dr[0].breakMin) lines.push("  " + lunch(dr[0].breakMin));
+      lines.push("", "");
+    });
+
+    var batch = sumBy(rows), all = sumBy(laborOf(job.id));
+    lines.push("------------------------------");
+    lines.push("THIS EMAIL:    " + fmtHrs(batch.tot) + " hrs" + perText(batch));
+    lines.push("JOB TO DATE:   " + fmtHrs(all.tot) + " hrs" + perText(all));
+    lines.push("", "Sent from Job Book");
     return lines.join("\n");
   }
 
