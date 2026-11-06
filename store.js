@@ -401,6 +401,9 @@
     return readyPromise;
   }
 
+  /* for the shared Feedback button (feedback.js) */
+  window.JB_client = function () { return client; };
+
   /* Sign out: open the app with #signout on the end of the address. */
   if (location.hash === '#signout') {
     ready().then(function () { history.replaceState(null, '', location.pathname); return client.auth.signOut(); })
